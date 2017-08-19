@@ -1,1 +1,1 @@
-# cs698o_asgn
+# Assignments of Visual Recognition (CS698O), IIT Kanpur
