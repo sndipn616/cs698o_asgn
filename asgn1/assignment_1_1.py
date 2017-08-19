@@ -20,10 +20,13 @@ import os
 import torch
 import numpy as np
 import torchvision
+import unicodedata
 from PIL import Image
+import torch.nn as nn
 import torch.utils.data
 from scipy.ndimage import imread
 import torchvision.models as models
+from torch.autograd import Variable
 import torchvision.transforms as transforms
 
 # get_ipython().magic(u'matplotlib inline')
@@ -39,6 +42,7 @@ root_dir = 'notMNIST_small'
 batch_size = 100
 num_epochs = 5
 learning_rate = 0.01
+num_classes = 10
 
 
 # ### Creating Custom Datasets
@@ -102,6 +106,32 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
         return img, target
 
+    def GetChar(self, direc):
+       
+        if direc[0] == 'A':
+            return 1
+        elif direc[0] == 'B':
+            return 2
+        elif direc[0] == 'C':
+            return 3
+        elif direc[0] == 'D':
+            return 4
+        elif direc[0] == 'E':
+            return 5
+        elif direc[0] == 'F':
+            return 6
+        elif direc[0] == 'G':
+            return 7
+        elif direc[0] == 'H':
+            return 8
+        elif direc[0] == 'I':
+            return 9
+        elif direc[0] == 'J':
+            return 10
+
+        
+            
+
     def Process_Dataset(self):
         if not os.path.exists(os.path.join(self.root_dir, self.processed_folder)):
             os.makedirs(os.path.join(self.root_dir, self.processed_folder))    #Create new folder
@@ -115,20 +145,31 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
             for img in os.listdir(os.path.join(self.root_dir, self.training_folder,direc)):
                 image = imread(os.path.join(self.root_dir, self.training_folder, direc, img))
                 image = torch.from_numpy(image)
-                train_images.append(image)
-                train_labels.append(direc)
+                train_images.append(image) 
+                
+                # print (type(temp))                           
+                train_labels.append(self.GetChar(direc))
                 # image.close()
-
+        train_labels = np.array(train_labels)
+        train_labels = torch.from_numpy(train_labels)
+        # print (len(train_labels[1]))
+        # print (np.array(train_labels).shape)
+        # train_labels = torch.LongTensor(train_labels)
         training_set = (train_images,train_labels)
 
         for direc in os.listdir(os.path.join(self.root_dir, self.test_folder)):
             for img in os.listdir(os.path.join(self.root_dir, self.test_folder,direc)):
                 image = imread(os.path.join(self.root_dir, self.test_folder, direc, img))
                 image = torch.from_numpy(image)
-                test_images.append(image)
-                test_labels.append(direc)
-                # image.close()
+                test_images.append(image)                            
+                test_labels.append(self.GetChar(direc))
+                
 
+                # image.close()
+        test_labels = np.array(test_labels)
+        test_labels = torch.from_numpy(test_labels)
+        # print (test_labels)
+        # test_labels = torch.LongTensor(test_labels)
         test_set = (test_images, test_labels)
 
         with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
@@ -162,18 +203,21 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
     
-# train_dataiter = iter(train_loader)
-# train_images, train_labels = train_dataiter.next()
-# print("Train images")
-# imshow(torchvision.utils.make_grid(train_images[0]))
-# print(train_images.shape)
+train_dataiter = iter(train_loader)
+train_images, train_labels = train_dataiter.next()
+print("Train images")
+imshow(torchvision.utils.make_grid(train_images))
+
 
 test_dataiter = iter(test_loader)
 test_images, test_labels = test_dataiter.next()
 print("Test images")
 imshow(torchvision.utils.make_grid(test_images))
-# print(test_images[0][0])
-# print(test_labels[0][0])
+# print(test_images[0].shape)
+# print(test_labels)
+# print(type(test_images))
+# print(type(test_labels))
+
 
 
 # ### VGG-16 and Resnet-18
@@ -181,7 +225,7 @@ imshow(torchvision.utils.make_grid(test_images))
 
 # In[ ]:
 
-'''
+
 vgg16 = models.vgg16(pretrained=True)
 resnet18 = models.resnet18(pretrained=True)
 
@@ -195,7 +239,7 @@ vgg16.classifier = nn.Sequential(
     nn.Dropout(),
     nn.Linear(4096, 10),
 )
-resnet18.fc = nn.Linear(resnet18.fc.in_features, 10)
+# resnet18.fc = nn.Linear(resnet18.fc.in_features, 10)
 
 # Add code for using CUDA here if it is available
 
@@ -205,9 +249,9 @@ resnet18.fc = nn.Linear(resnet18.fc.in_features, 10)
 # In[ ]:
 
 
-criterion = # Define cross-entropy loss
-optimizer_vgg16 = # Use Adam optimizer, use learning_rate hyper parameter
-optimizer_resnet18 = # Use Adam optimizer, use learning_rate hyper parameter
+criterion = nn.CrossEntropyLoss()# Define cross-entropy loss
+optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
+# optimizer_resnet18 = # Use Adam optimizer, use learning_rate hyper parameter
 
 
 # #### Finetuning
@@ -220,7 +264,28 @@ def train_vgg16():
     # Write loops so as to train the model for N epochs, use num_epochs hyper parameter
     # Train/finetune the VGG-16 network
     # Store the losses for every epoch and generate a graph using matplotlib
-    
+    # print ("Here")
+    for epoch in range(num_epochs):
+        for i, (images, labels) in enumerate(train_loader):  
+            # Convert torch tensor to Variable
+            print(i)
+            # print (images[0].shape)
+            images = Variable(images.view(-1, 224*224))
+            # print (labels)
+            labels = Variable(labels)
+            # if(use_gpu):
+            #     images=images.cuda()
+            #     labels=labels.cuda()
+            # # Forward + Backward + Optimize
+            # optimizer.zero_grad()  # zero the gradient buffer
+            # outputs = net(images)
+            # loss = criterion(outputs, labels)
+            # loss.backward()
+            # optimizer.step()
+            # if (i+1) % 100 == 0:
+            #     print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
+            #            %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+'''   
 def train_resnet18():
     # Same as above except now using the Resnet-18 network
 
@@ -256,3 +321,4 @@ get_ipython().magic(u'time test(resnet18)')
 
 # You can add more code to save the models if you want but otherwise this notebook is complete
 '''
+train_vgg16()
