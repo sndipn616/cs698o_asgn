@@ -28,6 +28,7 @@ import torchvision.transforms as transforms
 
 # get_ipython().magic(u'matplotlib inline')
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 
 # All hyper parameters go in the next block
@@ -94,10 +95,9 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         # doing this so that it is consistent with all other datasets
         # to return a PIL Image
         # print (img)
-        # img = Image.fromarray(img.numpy(), mode='L')
+        img = Image.fromarray(img.numpy(), mode='L')
 
         if self.transform is not None:
-
             img = self.transform(img)        
 
         return img, target
@@ -113,19 +113,21 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
         for direc in os.listdir(os.path.join(self.root_dir, self.training_folder)):
             for img in os.listdir(os.path.join(self.root_dir, self.training_folder,direc)):
-                image = Image.open(os.path.join(self.root_dir, self.training_folder, direc, img))
-                train_images.append(image.copy())
+                image = imread(os.path.join(self.root_dir, self.training_folder, direc, img))
+                image = torch.from_numpy(image)
+                train_images.append(image)
                 train_labels.append(direc)
-                image.close()
+                # image.close()
 
         training_set = (train_images,train_labels)
 
         for direc in os.listdir(os.path.join(self.root_dir, self.test_folder)):
             for img in os.listdir(os.path.join(self.root_dir, self.test_folder,direc)):
-                image = Image.open(os.path.join(self.root_dir, self.test_folder, direc, img))
-                test_images.append(image.copy())
+                image = imread(os.path.join(self.root_dir, self.test_folder, direc, img))
+                image = torch.from_numpy(image)
+                test_images.append(image)
                 test_labels.append(direc)
-                image.close()
+                # image.close()
 
         test_set = (test_images, test_labels)
 
@@ -141,6 +143,8 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 
 composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor()])
+# composed_transform = transforms.Compose([transforms.Scale((56,56)),transforms.ToTensor()])
+
 train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
 test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
@@ -154,20 +158,22 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch
 
 # Let's look at one batch of train and test images
 def imshow(img):
-    npimg = img.numpy()
+    npimg = img.numpy()    
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.show()
     
-train_dataiter = iter(train_loader)
-train_images, train_labels = train_dataiter.next()
-print("Train images")
-imshow(torchvision.utils.make_grid(train_images))
-print(train_images.shape)
+# train_dataiter = iter(train_loader)
+# train_images, train_labels = train_dataiter.next()
+# print("Train images")
+# imshow(torchvision.utils.make_grid(train_images[0]))
+# print(train_images.shape)
 
 test_dataiter = iter(test_loader)
 test_images, test_labels = test_dataiter.next()
 print("Test images")
 imshow(torchvision.utils.make_grid(test_images))
-print(test_images.shape)
+# print(test_images[0][0])
+# print(test_labels[0][0])
 
 
 # ### VGG-16 and Resnet-18
