@@ -16,13 +16,17 @@
 # All import statements go in this block
 
 from __future__ import division, print_function, unicode_literals
-import numpy as np
+import os
 import torch
+import numpy as np
+import torchvision
+from PIL import Image
 import torch.utils.data
+from scipy.ndimage import imread
 import torchvision.models as models
 import torchvision.transforms as transforms
 
-get_ipython().magic(u'matplotlib inline')
+# get_ipython().magic(u'matplotlib inline')
 import matplotlib.pyplot as plt
 
 
@@ -30,7 +34,7 @@ import matplotlib.pyplot as plt
 
 # In[ ]:
 
-
+root_dir = 'notMNIST_small'
 batch_size = 100
 num_epochs = 5
 learning_rate = 0.01
@@ -51,16 +55,84 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         # In this function store the parameters in instance variables and make a mapping
         # from images to labels and keep it as an instance variable. Make sure to check which
         # dataset is required; train or test; and create the mapping accordingly.
+        self.train = train
+        self.root_dir = root_dir
+        self.transform = transform
+        self.training_folder = 'train'
+        self.test_folder = 'test'
+        self.training_file = 'training.pt'
+        self.test_file = 'test.pt'
+        self.processed_folder = 'processed'
+
+        if not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.training_file)) and not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.test_file)):
+            self.Process_Dataset()
+
+        if self.train:
+            self.train_data, self.train_labels = torch.load(
+                os.path.join(self.root_dir, self.processed_folder, self.training_file))
+        else:
+            self.test_data, self.test_labels = torch.load(os.path.join(self.root_dir, self.processed_folder, self.test_file))
         
     def __len__(self):
         # return the size of the dataset (total number of images) as an integer
         # this should be rather easy if you created a mapping in __init__
+        if self.train:
+            return len(self.train_data)
+        else:
+            return len(self.test_data)
         
     def __getitem__(self, idx):
         # idx - the index of the sample requested
         #
         # Open the image correspoding to idx, apply transforms on it and return a tuple (image, label)
         # where label is an integer from 0-9 (since notMNIST has 10 classes)
+        if self.train:
+            img, target = self.train_data[idx], self.train_labels[idx]
+        else:
+            img, target = self.test_data[idx], self.test_labels[idx]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        # print (img)
+        # img = Image.fromarray(img.numpy(), mode='L')
+
+        if self.transform is not None:
+
+            img = self.transform(img)        
+
+        return img, target
+
+    def Process_Dataset(self):
+        if not os.path.exists(os.path.join(self.root_dir, self.processed_folder)):
+            os.makedirs(os.path.join(self.root_dir, self.processed_folder))    #Create new folder
+
+        train_images = []
+        train_labels = []
+        test_images = []
+        test_labels = []
+
+        for direc in os.listdir(os.path.join(self.root_dir, self.training_folder)):
+            for img in os.listdir(os.path.join(self.root_dir, self.training_folder,direc)):
+                image = Image.open(os.path.join(self.root_dir, self.training_folder, direc, img))
+                train_images.append(image.copy())
+                train_labels.append(direc)
+                image.close()
+
+        training_set = (train_images,train_labels)
+
+        for direc in os.listdir(os.path.join(self.root_dir, self.test_folder)):
+            for img in os.listdir(os.path.join(self.root_dir, self.test_folder,direc)):
+                image = Image.open(os.path.join(self.root_dir, self.test_folder, direc, img))
+                test_images.append(image.copy())
+                test_labels.append(direc)
+                image.close()
+
+        test_set = (test_images, test_labels)
+
+        with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
+            torch.save(training_set, f)
+        with open(os.path.join(self.root_dir, self.processed_folder, self.test_file), 'wb') as f:
+            torch.save(test_set, f)
 
 
 # We shall now load the dataset. You just need to supply the `root_dir` in the block below and if you implemented the above block correctly, it should work without any issues.
@@ -69,8 +141,8 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 
 composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor()])
-train_dataset = CDATA(root_dir='', train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = CDATA(root_dir='', train=False, transform=composed_transform) # Supply proper root_dir
+train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
 # Let's check the size of the datasets, if implemented correctly they should be 16854 and 1870 respectively
 print('Size of train dataset: %d' % len(train_dataset))
@@ -89,11 +161,13 @@ train_dataiter = iter(train_loader)
 train_images, train_labels = train_dataiter.next()
 print("Train images")
 imshow(torchvision.utils.make_grid(train_images))
+print(train_images.shape)
 
 test_dataiter = iter(test_loader)
 test_images, test_labels = test_dataiter.next()
 print("Test images")
 imshow(torchvision.utils.make_grid(test_images))
+print(test_images.shape)
 
 
 # ### VGG-16 and Resnet-18
@@ -101,7 +175,7 @@ imshow(torchvision.utils.make_grid(test_images))
 
 # In[ ]:
 
-
+'''
 vgg16 = models.vgg16(pretrained=True)
 resnet18 = models.resnet18(pretrained=True)
 
@@ -175,3 +249,4 @@ get_ipython().magic(u'time test(resnet18)')
 
 
 # You can add more code to save the models if you want but otherwise this notebook is complete
+'''
