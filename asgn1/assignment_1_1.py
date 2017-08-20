@@ -17,6 +17,7 @@
 
 from __future__ import division, print_function, unicode_literals
 import os
+import sys
 import torch
 import numpy as np
 import torchvision
@@ -39,10 +40,11 @@ import matplotlib.image as mpimg
 # In[ ]:
 
 root_dir = 'notMNIST_small'
-batch_size = 100
+batch_size = 1
 num_epochs = 5
 learning_rate = 0.01
 num_classes = 10
+use_gpu = False
 
 
 # ### Creating Custom Datasets
@@ -52,7 +54,7 @@ num_classes = 10
 
 
 class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
-    def __init__(self, root_dir, train, transform=None):
+    def __init__(self, root_dir, train, transform=None, norm=False):
         # root_dir  - the root directory of the dataset
         # train     - a boolean parameter representing whether to return the training set or the test set
         # transform - the transforms to be applied on the images before returning them
@@ -64,10 +66,15 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         self.root_dir = root_dir
         self.transform = transform
         self.training_folder = 'train'
-        self.test_folder = 'test'
-        self.training_file = 'training.pt'
-        self.test_file = 'test.pt'
+        self.test_folder = 'test'        
         self.processed_folder = 'processed'
+
+        if norm == False:
+            self.training_file = 'training.pt'
+            self.test_file = 'test.pt'
+        else:
+            self.training_file = 'training2.pt'
+            self.test_file = 'test2.pt'
 
         if not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.training_file)) and not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.test_file)):
             self.Process_Dataset()
@@ -109,25 +116,25 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
     def GetChar(self, direc):
        
         if direc[0] == 'A':
-            return 1
+            return 0
         elif direc[0] == 'B':
-            return 2
+            return 1
         elif direc[0] == 'C':
-            return 3
+            return 2
         elif direc[0] == 'D':
-            return 4
+            return 3
         elif direc[0] == 'E':
-            return 5
+            return 4
         elif direc[0] == 'F':
-            return 6
+            return 5
         elif direc[0] == 'G':
-            return 7
+            return 6
         elif direc[0] == 'H':
-            return 8
+            return 7
         elif direc[0] == 'I':
-            return 9
+            return 8
         elif direc[0] == 'J':
-            return 10
+            return 9
 
         
             
@@ -182,12 +189,18 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 # In[ ]:
 
-
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+# composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor(), normalize])
 composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor()])
+
 # composed_transform = transforms.Compose([transforms.Scale((56,56)),transforms.ToTensor()])
 
-train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform, norm=False) 
+test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform, norm=False)
+
+# train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform, norm=True) 
+# test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform, norm=True)
 
 # Let's check the size of the datasets, if implemented correctly they should be 16854 and 1870 respectively
 print('Size of train dataset: %d' % len(train_dataset))
@@ -203,16 +216,16 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
     
-train_dataiter = iter(train_loader)
-train_images, train_labels = train_dataiter.next()
-print("Train images")
-imshow(torchvision.utils.make_grid(train_images))
+# train_dataiter = iter(train_loader)
+# train_images, train_labels = train_dataiter.next()
+# print("Train images")
+# imshow(torchvision.utils.make_grid(train_images))
 
 
-test_dataiter = iter(test_loader)
-test_images, test_labels = test_dataiter.next()
-print("Test images")
-imshow(torchvision.utils.make_grid(test_images))
+# test_dataiter = iter(test_loader)
+# test_images, test_labels = test_dataiter.next()
+# print("Test images")
+# imshow(torchvision.utils.make_grid(test_images))
 # print(test_images[0].shape)
 # print(test_labels)
 # print(type(test_images))
@@ -239,7 +252,8 @@ vgg16.classifier = nn.Sequential(
     nn.Dropout(),
     nn.Linear(4096, 10),
 )
-# resnet18.fc = nn.Linear(resnet18.fc.in_features, 10)
+
+resnet18.fc = nn.Linear(resnet18.fc.in_features, 10)
 
 # Add code for using CUDA here if it is available
 
@@ -251,7 +265,7 @@ vgg16.classifier = nn.Sequential(
 
 criterion = nn.CrossEntropyLoss()# Define cross-entropy loss
 optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
-# optimizer_resnet18 = # Use Adam optimizer, use learning_rate hyper parameter
+optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
 
 
 # #### Finetuning
@@ -260,41 +274,75 @@ optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate) # Use
 # In[ ]:
 
 
+# temp = torch.FloatTensor(batch_size, 2, 224, 224).zero_()
+
 def train_vgg16():
     # Write loops so as to train the model for N epochs, use num_epochs hyper parameter
     # Train/finetune the VGG-16 network
     # Store the losses for every epoch and generate a graph using matplotlib
     # print ("Here")
+    # print (temp.size())
+    loss_value = []
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):  
-            # Convert torch tensor to Variable
-            print(i)
-            # print (images[0].shape)
-            images = Variable(images.view(-1, 224*224))
-            # print (labels)
+            # Convert torch tensor to Variable           
+            images = Variable(images)           
             labels = Variable(labels)
-            # if(use_gpu):
-            #     images=images.cuda()
-            #     labels=labels.cuda()
-            # # Forward + Backward + Optimize
-            # optimizer.zero_grad()  # zero the gradient buffer
-            # outputs = net(images)
-            # loss = criterion(outputs, labels)
-            # loss.backward()
-            # optimizer.step()
-            # if (i+1) % 100 == 0:
-            #     print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
-            #            %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
-'''   
+            if(use_gpu):
+                images=images.cuda()
+                labels=labels.cuda()
+            # Forward + Backward + Optimize
+            optimizer_vgg16.zero_grad()  # zero the gradient buffer
+            images = torch.cat((images, images, images), 1)
+            outputs = vgg16(images)
+            
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer_vgg16.step()
+            # sys.exit()
+            if (i+1) % 10 == 0:
+                print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
+                       %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+                # loss_value.append(loss.data[0])
+
+                # plt.ylabel('Loss')
+                # plt.xlabel('iter*100')
+                # plt.plot(loss_value)
+                # plt.show()
+   
 def train_resnet18():
     # Same as above except now using the Resnet-18 network
+    for i, (images, labels) in enumerate(train_loader):  
+            # Convert torch tensor to Variable            
+            images = Variable(images)            
+            labels = Variable(labels)
+            if(use_gpu):
+                images=images.cuda()
+                labels=labels.cuda()
+            # Forward + Backward + Optimize
+            optimizer_resnet18.zero_grad()  # zero the gradient buffer
+            images = torch.cat((images, images, images), 1)            
+            outputs = resnet18(images)
+            
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer_resnet18.step()
+            if (i+1) % 100 == 0:
+                print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
+                       %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+                # loss_value.append(loss.data[0])
+
+                # plt.ylabel('Loss')
+                # plt.xlabel('iter*100')
+                # plt.plot(loss_value)
+                # plt.show()
 
 
 # Now let us start the training/finetuning
 
 # In[ ]:
 
-
+'''
 get_ipython().magic(u'time train_vgg16()')
 get_ipython().magic(u'time train_resnet18()')
 
@@ -304,17 +352,32 @@ get_ipython().magic(u'time train_resnet18()')
 
 # In[ ]:
 
-
+'''
 def test(model):
     # Write loops for testing the model on the test set
     # You should also print out the accuracy of the model
+    correct = 0
+    total = 0
+    
+    for images, labels in test_loader:
+        images = Variable(images)
+        
+        if(use_gpu):
+            images = images.cuda()
+            
+        images = torch.cat((images, images, images), 1)
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted.cpu() == labels.cpu()).sum()
+    print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
 
 
 # Test the models
 
 # In[ ]:
 
-
+'''
 get_ipython().magic(u'time test(vgg16)')
 get_ipython().magic(u'time test(resnet18)')
 
@@ -322,3 +385,6 @@ get_ipython().magic(u'time test(resnet18)')
 # You can add more code to save the models if you want but otherwise this notebook is complete
 '''
 train_vgg16()
+test(vgg16)
+train_resnet18()
+test(resnet18)
