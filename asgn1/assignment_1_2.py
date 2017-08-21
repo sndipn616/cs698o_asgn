@@ -208,10 +208,63 @@ class CustomResnet(nn.Module): # Extend PyTorch's Module class
         # The parameters and names for the layers are provided in the diagram
         # The variable names have to be the same as the ones in the diagram
         # Otherwise, the weights will not load
+        self.seq_model1 = nn.Sequential(OrderedDict([
+          ('conv1', nn.Conv2d(3,64,7,2,1)),
+          ('bn1', nn.BatchNorm2d(64)),
+          ('relu', nn.ReLU(inplace=True)),
+          ('maxpool', nn.MaxPool2d(3,2,1))
+        ]))        
+        # self.conv1 = 
+        # self.bn1 = 
+        # self.relu = 
+        # self.maxpool = 
+        self.seq_model2 = nn.Sequential(OrderedDict([
+          ('lyr1conv1', nn.Conv2d(64,64,3,1,1)),
+          ('lyr1bn1', nn.BatchNorm2d(64)),
+          ('lyr1relu1', nn.ReLU(inplace=True)),
+          ('lyr1conv2', nn.Conv2d(64,64,3,1,1)),
+          ('lyr1bn2', nn.BatchNorm2d(64))
+        ]))
+        # self.lyr1conv1 = 
+        # self.lyr1bn1 = 
+        # self.lyr1relu1 = 
+        # self.lyr1conv2 = 
+        # self.lyr1bn2 = 
+
+        self.lyr1relu2 = nn.ReLU(inplace=True)
+
+        self.seq_model3 = nn.Sequential(OrderedDict([
+          ('lyr2conv1', nn.Conv2d(64,64,3,1,1)),
+          ('lyr2bn1', nn.BatchNorm2d(64)),
+          ('lyr2relu1', nn.ReLU(inplace=True)),
+          ('lyr2conv2', nn.Conv2d(64,64,3,1,1)),
+          ('lyr2bn2', nn.BatchNorm2d(64))
+        ]))
+
+        # self.lyr2conv1 = 
+        # self.lyr2bn1 = 
+        # self.lyr2relu1 =
+        # self.lyr2conv2 = 
+        # self.lyr2bn2 = 
+
+        self.lyr2relu2 = nn.ReLU(inplace=True)
+
+        self.fc = nn.Linear(4096, num_classes)
+
         
     def forward(self, x):
         # Here you have to define the forward pass
         # Make sure you take care of the skip connections
+        out = self.seq_model1(x)
+        out1 = self.seq_model2(out)
+        out = torch.add(out,1,out1)
+        self.lyr1relu2(out)
+        out1 = self.seq_model3(out)
+        out = torch.add(out,1,out1)
+        self.lyr2relu2(out)
+        out = self.fc(out)
+
+        return out
 
 
 # #### Finetune on pre-trained CIFAR-100 weights
