@@ -17,7 +17,6 @@
 
 from __future__ import division, print_function, unicode_literals
 import os
-import sys
 import torch
 import numpy as np
 import torchvision
@@ -40,8 +39,8 @@ import matplotlib.image as mpimg
 # In[ ]:
 
 root_dir = 'notMNIST_small'
-batch_size = 1
-num_epochs = 5
+batch_size = 5
+num_epochs = 3
 learning_rate = 0.01
 num_classes = 10
 use_gpu = False
@@ -54,7 +53,7 @@ use_gpu = False
 
 
 class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
-    def __init__(self, root_dir, train, transform=None, norm=False):
+    def __init__(self, root_dir, train, transform=None):
         # root_dir  - the root directory of the dataset
         # train     - a boolean parameter representing whether to return the training set or the test set
         # transform - the transforms to be applied on the images before returning them
@@ -66,15 +65,10 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         self.root_dir = root_dir
         self.transform = transform
         self.training_folder = 'train'
-        self.test_folder = 'test'        
+        self.test_folder = 'test'
+        self.training_file = 'training.pt'
+        self.test_file = 'test.pt'
         self.processed_folder = 'processed'
-
-        if norm == False:
-            self.training_file = 'training.pt'
-            self.test_file = 'test.pt'
-        else:
-            self.training_file = 'training2.pt'
-            self.test_file = 'test2.pt'
 
         if not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.training_file)) and not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.test_file)):
             self.Process_Dataset()
@@ -106,10 +100,10 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         # doing this so that it is consistent with all other datasets
         # to return a PIL Image
         # print (img)
-        img = Image.fromarray(img.numpy(), mode='L')
+        # img = Image.fromarray(img.numpy(), mode='L')
 
-        if self.transform is not None:
-            img = self.transform(img)        
+        # if self.transform is not None:
+        #     img = self.transform(img)        
 
         return img, target
 
@@ -152,6 +146,11 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
             for img in os.listdir(os.path.join(self.root_dir, self.training_folder,direc)):
                 image = imread(os.path.join(self.root_dir, self.training_folder, direc, img))
                 image = torch.from_numpy(image)
+                image = Image.fromarray(image.numpy(), mode='L')
+
+                if self.transform is not None:
+                    image = self.transform(image)
+
                 train_images.append(image) 
                 
                 # print (type(temp))                           
@@ -168,6 +167,11 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
             for img in os.listdir(os.path.join(self.root_dir, self.test_folder,direc)):
                 image = imread(os.path.join(self.root_dir, self.test_folder, direc, img))
                 image = torch.from_numpy(image)
+                image = Image.fromarray(image.numpy(), mode='L')
+
+                if self.transform is not None:
+                    image = self.transform(image)
+
                 test_images.append(image)                            
                 test_labels.append(self.GetChar(direc))
                 
@@ -189,18 +193,12 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 # In[ ]:
 
-normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-# composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor(), normalize])
-composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor()])
 
+composed_transform = transforms.Compose([transforms.Scale((224,224)),transforms.ToTensor()])
 # composed_transform = transforms.Compose([transforms.Scale((56,56)),transforms.ToTensor()])
 
-train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform, norm=False) 
-test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform, norm=False)
-
-# train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform, norm=True) 
-# test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform, norm=True)
+train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
 # Let's check the size of the datasets, if implemented correctly they should be 16854 and 1870 respectively
 print('Size of train dataset: %d' % len(train_dataset))
@@ -274,28 +272,25 @@ optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate)
 # In[ ]:
 
 
-# temp = torch.FloatTensor(batch_size, 2, 224, 224).zero_()
-
 def train_vgg16():
     # Write loops so as to train the model for N epochs, use num_epochs hyper parameter
     # Train/finetune the VGG-16 network
     # Store the losses for every epoch and generate a graph using matplotlib
     # print ("Here")
-    # print (temp.size())
-    loss_value = []
+    print ("Training VGG")
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):  
             # Convert torch tensor to Variable           
-            images = Variable(images)           
+            images_ = Variable(images)
             labels = Variable(labels)
             if(use_gpu):
                 images=images.cuda()
                 labels=labels.cuda()
             # Forward + Backward + Optimize
             optimizer_vgg16.zero_grad()  # zero the gradient buffer
-            images = torch.cat((images, images, images), 1)
-            outputs = vgg16(images)
-            
+            final_image = torch.cat((images_, images_, images_), 1)
+            outputs = vgg16(final_image)
+
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer_vgg16.step()
@@ -303,39 +298,36 @@ def train_vgg16():
             if (i+1) % 10 == 0:
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                        %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
-                # loss_value.append(loss.data[0])
 
-                # plt.ylabel('Loss')
-                # plt.xlabel('iter*100')
-                # plt.plot(loss_value)
-                # plt.show()
+            if i == 2000:
+                break
    
 def train_resnet18():
     # Same as above except now using the Resnet-18 network
-    for i, (images, labels) in enumerate(train_loader):  
-            # Convert torch tensor to Variable            
-            images = Variable(images)            
+    print ("Training Resnet")
+    for epoch in range(num_epochs):
+        for i, (images, labels) in enumerate(train_loader):  
+            # Convert torch tensor to Variable           
+            images_ = Variable(images)
             labels = Variable(labels)
             if(use_gpu):
                 images=images.cuda()
                 labels=labels.cuda()
             # Forward + Backward + Optimize
             optimizer_resnet18.zero_grad()  # zero the gradient buffer
-            images = torch.cat((images, images, images), 1)            
-            outputs = resnet18(images)
-            
+            final_image = torch.cat((images_, images_, images_), 1)
+            outputs = vgg16(final_image)
+
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer_resnet18.step()
-            if (i+1) % 100 == 0:
+            # sys.exit()
+            if (i+1) % 10 == 0:
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                        %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
-                # loss_value.append(loss.data[0])
 
-                # plt.ylabel('Loss')
-                # plt.xlabel('iter*100')
-                # plt.plot(loss_value)
-                # plt.show()
+            if i == 2000:
+                break
 
 
 # Now let us start the training/finetuning
@@ -351,14 +343,14 @@ get_ipython().magic(u'time train_resnet18()')
 # Once finetuning is done we need to test it on the test set.
 
 # In[ ]:
-
 '''
+
 def test(model):
     # Write loops for testing the model on the test set
     # You should also print out the accuracy of the model
     correct = 0
     total = 0
-    
+    print ("Testing")
     for images, labels in test_loader:
         images = Variable(images)
         
@@ -371,6 +363,7 @@ def test(model):
         total += labels.size(0)
         correct += (predicted.cpu() == labels.cpu()).sum()
     print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
+    return (100 * correct / total)
 
 
 # Test the models
@@ -384,7 +377,13 @@ get_ipython().magic(u'time test(resnet18)')
 
 # You can add more code to save the models if you want but otherwise this notebook is complete
 '''
+f = open('result.txt', 'w')
 train_vgg16()
-test(vgg16)
+acc = test(vgg16)
+f.write(str(acc) + "\n")
+
 train_resnet18()
-test(resnet18)
+acc = test(resnet18)
+f.write(str(acc) + "\n")
+
+f.close()
