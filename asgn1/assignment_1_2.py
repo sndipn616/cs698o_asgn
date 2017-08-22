@@ -16,10 +16,17 @@
 # All import statements go in this block
 
 from __future__ import division, print_function, unicode_literals
+import os
+import sys
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.utils.data
+from PIL import Image
+from scipy.ndimage import imread
+from collections import OrderedDict
+from torch.autograd import Variable
+import torchvision.models as models
 import torchvision.transforms as transforms
 
 # get_ipython().magic(u'matplotlib inline')
@@ -29,14 +36,17 @@ import matplotlib.pyplot as plt
 # All hyper parameters go in the next block
 
 # In[ ]:
+# torch.cuda.device(1)
 
 
 root_dir = 'notMNIST_small'
 batch_size = 5
 num_epochs = 3
 learning_rate = 0.01
-num_classes = 10
+numClasses = 10
 use_gpu = False
+model_file = 'custom_resnet_trained'
+model_file_resnet = 'custom_resnet'
 
 
 # ### Create Custom Dataset and Loader
@@ -184,8 +194,8 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
     
 composed_transform = transforms.Compose([transforms.Scale((32,32)),transforms.ToTensor()])
-train_dataset = CDATA(root_dir='', train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = CDATA(root_dir='', train=False, transform=composed_transform) # Supply proper root_dir
+train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
@@ -208,62 +218,81 @@ class CustomResnet(nn.Module): # Extend PyTorch's Module class
         # The parameters and names for the layers are provided in the diagram
         # The variable names have to be the same as the ones in the diagram
         # Otherwise, the weights will not load
-        self.seq_model1 = nn.Sequential(OrderedDict([
-          ('conv1', nn.Conv2d(3,64,7,2,1)),
-          ('bn1', nn.BatchNorm2d(64)),
-          ('relu', nn.ReLU(inplace=True)),
-          ('maxpool', nn.MaxPool2d(3,2,1))
-        ]))        
-        # self.conv1 = 
-        # self.bn1 = 
-        # self.relu = 
-        # self.maxpool = 
-        self.seq_model2 = nn.Sequential(OrderedDict([
-          ('lyr1conv1', nn.Conv2d(64,64,3,1,1)),
-          ('lyr1bn1', nn.BatchNorm2d(64)),
-          ('lyr1relu1', nn.ReLU(inplace=True)),
-          ('lyr1conv2', nn.Conv2d(64,64,3,1,1)),
-          ('lyr1bn2', nn.BatchNorm2d(64))
-        ]))
-        # self.lyr1conv1 = 
-        # self.lyr1bn1 = 
-        # self.lyr1relu1 = 
-        # self.lyr1conv2 = 
-        # self.lyr1bn2 = 
+        self.conv1 = nn.Conv2d(in_channels=3,out_channels=64,kernel_size=7,stride=2,padding=1,bias=True)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(3,2,1)
+        
+        self.lyr1conv1 = nn.Conv2d(in_channels=64,out_channels=64,kernel_size=3,stride=1,padding=1,bias=True) 
+        self.lyr1bn1 = nn.BatchNorm2d(64)
+        self.lyr1relu1 = nn.ReLU(inplace=True)
+        self.lyr1conv2 = nn.Conv2d(in_channels=64,out_channels=64,kernel_size=3,stride=1,padding=1,bias=True) 
+        self.lyr1bn2 = nn.BatchNorm2d(64)
 
         self.lyr1relu2 = nn.ReLU(inplace=True)
 
-        self.seq_model3 = nn.Sequential(OrderedDict([
-          ('lyr2conv1', nn.Conv2d(64,64,3,1,1)),
-          ('lyr2bn1', nn.BatchNorm2d(64)),
-          ('lyr2relu1', nn.ReLU(inplace=True)),
-          ('lyr2conv2', nn.Conv2d(64,64,3,1,1)),
-          ('lyr2bn2', nn.BatchNorm2d(64))
-        ]))
-
-        # self.lyr2conv1 = 
-        # self.lyr2bn1 = 
-        # self.lyr2relu1 =
-        # self.lyr2conv2 = 
-        # self.lyr2bn2 = 
+        self.lyr2conv1 = nn.Conv2d(in_channels=64,out_channels=64,kernel_size=3,stride=1,padding=1,bias=True) 
+        self.lyr2bn1 = nn.BatchNorm2d(64)
+        self.lyr2relu1 = nn.ReLU(inplace=True)
+        self.lyr2conv2 = nn.Conv2d(in_channels=64,out_channels=64,kernel_size=3,stride=1,padding=1,bias=True) 
+        self.lyr2bn2 = nn.BatchNorm2d(64)
 
         self.lyr2relu2 = nn.ReLU(inplace=True)
 
-        self.fc = nn.Linear(4096, num_classes)
+        self.fc = nn.Linear(4096, num_classes)  
+
+        
 
         
     def forward(self, x):
         # Here you have to define the forward pass
         # Make sure you take care of the skip connections
-        out = self.seq_model1(x)
-        out1 = self.seq_model2(out)
-        out = torch.add(out,1,out1)
-        self.lyr1relu2(out)
-        out1 = self.seq_model3(out)
-        out = torch.add(out,1,out1)
-        self.lyr2relu2(out)
-        out = self.fc(out)
+        print (x.size())
+        out = self.conv1(x)
+        print (out.size())
+        out = self.bn1(out)
+        print (out.size())
+        self.relu(out)
+        print (out.size())
+        out = self.maxpool(out)
+        print (out.size())
 
+        out1 = self.lyr1conv1(out)
+        print (out1.size())
+        out1 = self.lyr1bn1(out1)
+        print (out1.size())
+        self.lyr1relu1(out1)
+        print (out1.size())
+        out1 = self.lyr1conv2(out1)
+        print (out1.size())
+        out1 = self.lyr1bn2(out1)
+        print (out1.size())
+
+        out = out + out1
+        print (out.size())
+        self.lyr1relu2(out)
+        print (out.size())
+
+        out1 = self.lyr2conv1(out)
+        print (out1.size())
+        out1 = self.lyr2bn1(out1)
+        print (out1.size())
+        self.lyr2relu1(out1)
+        print (out1.size())
+        out1 = self.lyr2conv2(out1)
+        print (out1.size())
+        out1 = self.lyr2bn2(out1)
+        print (out1.size())
+
+        out = out + out1
+        print (out.size())
+        self.lyr2relu2(out)
+
+        print (out.size())
+
+        out = self.fc(out)
+        
+        print (out.size())
         return out
 
 
@@ -277,7 +306,7 @@ model = CustomResnet(num_classes = 100) # 100 classes since CIFAR-100 has 100 cl
 
 # Load CIFAR-100 weights. (Download them from assignment page)
 # If network was properly implemented, weights should load without any problems
-model.load_state_dict(torch.load('')) # Supply the path to the weight file
+# model.load_state_dict(torch.load('CIFAR-100_weights', map_location=lambda storage, loc: storage)) # Supply the path to the weight file
 
 
 # ##### Optional
@@ -295,15 +324,38 @@ model.load_state_dict(torch.load('')) # Supply the path to the weight file
 
 
 # Change last layer to output 10 classes since our dataset has 10 classes
-model.fc = # Complete this statement. It is similar to the resnet18 case
+model.fc = nn.Linear(model.fc.in_features, numClasses)# Complete this statement. It is similar to the resnet18 case
 
 # Loss function and optimizers
-criterion = # Define cross-entropy loss
-optimizer = # Use Adam optimizer, use learning_rate hyper parameter
+criterion = nn.CrossEntropyLoss()# Define cross-entropy loss
+optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
 
 def train():
     # Code for training the model
     # Make sure to output a matplotlib graph of training losses
+    print ("Training Resnet")
+    for epoch in range(num_epochs):
+        for i, (images, labels) in enumerate(train_loader):  
+            # Convert torch tensor to Variable           
+            images_ = Variable(images)
+            labels = Variable(labels)
+            if(use_gpu):
+                images=images.cuda()
+                labels=labels.cuda()
+            # Forward + Backward + Optimize
+            optimizer.zero_grad()  # zero the gradient buffer
+            final_image = torch.cat((images_, images_, images_), 1)
+            outputs = model(final_image)
+
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            # sys.exit()
+            if (i+1) % 10 == 0:
+                print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
+                       %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+
+    torch.save(model.state_dict(), model_file_resnet)
 
 # get_ipython().magic(u'time train()')
 
@@ -313,9 +365,26 @@ def train():
 # In[ ]:
 
 
-def test():
+def test(model):
     # Write loops for testing the model on the test set
     # You should also print out the accuracy of the model
+    correct = 0
+    total = 0
+    print ("Testing")
+    for images, labels in test_loader:        
+        
+        if(use_gpu):
+            images = Variable(images.cuda())
+        else:
+            images = Variable(images)
+            
+        images = torch.cat((images, images, images), 1)
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted.cpu() == labels.cpu()).sum()
+    print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
+    return (100 * correct / total)
     
 # get_ipython().magic(u'time test()')
 
@@ -326,9 +395,14 @@ def test():
 # In[ ]:
 
 
+# test(model)
+
 # Reinstantiate the model and optimizer
 model = CustomResnet(num_classes = 10)
-optimizer = # Use Adam optimizer, use learning_rate hyper parameter
+optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+# model.load_state_dict(torch.load('CIFAR-100_weights'))
+train()
+test(model)
 
 # Train
 # get_ipython().magic(u'time train()')

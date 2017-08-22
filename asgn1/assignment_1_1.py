@@ -38,12 +38,16 @@ import matplotlib.image as mpimg
 
 # In[ ]:
 
+# torch.cuda.device(1)
+
 root_dir = 'notMNIST_small'
 batch_size = 5
 num_epochs = 3
 learning_rate = 0.01
 num_classes = 10
 use_gpu = False
+model_file_vgg = 'vgg16'
+model_file_resnet = 'resnet18'
 
 
 # ### Creating Custom Datasets
@@ -299,8 +303,9 @@ def train_vgg16():
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                        %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
 
-            if i == 2000:
-                break
+    torch.save(vgg16.state_dict(), model_file_vgg)
+            # if i == 2000:
+            #     break
    
 def train_resnet18():
     # Same as above except now using the Resnet-18 network
@@ -316,7 +321,7 @@ def train_resnet18():
             # Forward + Backward + Optimize
             optimizer_resnet18.zero_grad()  # zero the gradient buffer
             final_image = torch.cat((images_, images_, images_), 1)
-            outputs = vgg16(final_image)
+            outputs = resnet18(final_image)
 
             loss = criterion(outputs, labels)
             loss.backward()
@@ -326,8 +331,9 @@ def train_resnet18():
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                        %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
 
-            if i == 2000:
-                break
+    torch.save(resnet18.state_dict(), model_file_resnet)
+            # if i == 2000:
+            #     break
 
 
 # Now let us start the training/finetuning
