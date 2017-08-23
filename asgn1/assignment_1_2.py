@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 
 root_dir = 'notMNIST_small'
 batch_size = 5
-num_epochs = 3
+num_epochs = 1
 learning_rate = 0.01
 numClasses = 10
 use_gpu = False
@@ -195,12 +195,12 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 
     
-# composed_transform = transforms.Compose([transforms.Scale((32,32)),transforms.ToTensor()])
-# train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
-# test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+composed_transform = transforms.Compose([transforms.Scale((32,32)),transforms.ToTensor()])
+train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
-# train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-# test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 
 # ### Creating a Custom Network
@@ -352,12 +352,12 @@ def sanity_test(model, features, labels, total_images):
 
    
 
-data_dict = unpickle(cifar_100)
-total_images = len(data_dict['fine_labels'])
-features = data_dict['data'].reshape(total_images, 3, 32, 32)
-labels = data_dict['fine_labels']
+# data_dict = unpickle(cifar_100)
+# total_images = len(data_dict['fine_labels'])
+# features = data_dict['data'].reshape(total_images, 3, 32, 32)
+# labels = data_dict['fine_labels']
 # print (feature.shape)
-sanity_test(model, features, labels, total_images)
+# sanity_test(model, features, labels, total_images)
 
 
 
@@ -366,13 +366,16 @@ sanity_test(model, features, labels, total_images)
 
 # In[ ]:
 
-'''
+
 # Change last layer to output 10 classes since our dataset has 10 classes
 model.fc = nn.Linear(model.fc.in_features, numClasses)# Complete this statement. It is similar to the resnet18 case
 
 # Loss function and optimizers
 criterion = nn.CrossEntropyLoss()# Define cross-entropy loss
 optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+
+if use_gpu:
+    model.cuda()
 
 def train():
     # Code for training the model
@@ -398,6 +401,9 @@ def train():
             if (i+1) % 10 == 0:
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                        %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+
+            if i == 500 and not use_gpu:
+                break
 
     torch.save(model.state_dict(), model_file_resnet)
 
@@ -447,7 +453,7 @@ def test(model):
 # model.load_state_dict(torch.load('CIFAR-100_weights'))
 train()
 test(model)
-
+'''
 # Train
 # get_ipython().magic(u'time train()')
 
