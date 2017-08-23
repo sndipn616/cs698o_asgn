@@ -378,10 +378,11 @@ with torch.cuda.device(2):
     if use_gpu:
         model.cuda()
 
-    def train():
+    def train(file):
         # Code for training the model
         # Make sure to output a matplotlib graph of training losses
         print ("Training Resnet")
+        model_file_resnet = file
         for epoch in range(num_epochs):
             for i, (images, labels) in enumerate(train_loader):  
                 # Convert torch tensor to Variable           
@@ -436,21 +437,19 @@ with torch.cuda.device(2):
         
     # get_ipython().magic(u'time test()')
 
-
-    # #### Training from scratch
-    # Now we shall try training the model from scratch and observe the differences.
-
-    # In[ ]:
-
-
-    # test(model)
+    train('custom_resnet_type-1')
+    test(model)
 
     # Reinstantiate the model and optimizer
-    # model = CustomResnet(num_classes = 10)
-    # optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
-    # model.load_state_dict(torch.load('CIFAR-100_weights'))
-    train()
+    model = CustomResnet(num_classes = 10)
+    optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+    model.load_state_dict(torch.load('CIFAR-100_weights'))
+
+    model.cuda()
+
+    train('custom_resnet_type-2')
     test(model)
+    
     '''
     # Train
     # get_ipython().magic(u'time train()')
