@@ -20,6 +20,7 @@ import os
 import sys
 import numpy as np
 import torch
+import cPickle
 import torch.nn as nn
 import torch.utils.data
 from PIL import Image
@@ -47,6 +48,7 @@ numClasses = 10
 use_gpu = False
 model_file = 'custom_resnet_trained'
 model_file_resnet = 'custom_resnet'
+cifar_100 = 'cifar-100-python/test'
 
 
 # ### Create Custom Dataset and Loader
@@ -193,12 +195,12 @@ class CDATA(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 
     
-composed_transform = transforms.Compose([transforms.Scale((32,32)),transforms.ToTensor()])
-train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+# composed_transform = transforms.Compose([transforms.Scale((32,32)),transforms.ToTensor()])
+# train_dataset = CDATA(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+# test_dataset = CDATA(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+# train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+# test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 
 # ### Creating a Custom Network
@@ -207,7 +209,6 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch
 # [Full size image](architecture.html)
 
 # In[ ]:
-
 
 class CustomResnet(nn.Module): # Extend PyTorch's Module class
     def __init__(self, num_classes = 10):
@@ -218,11 +219,12 @@ class CustomResnet(nn.Module): # Extend PyTorch's Module class
         # The parameters and names for the layers are provided in the diagram
         # The variable names have to be the same as the ones in the diagram
         # Otherwise, the weights will not load
-        self.conv1 = nn.Conv2d(in_channels=3,out_channels=64,kernel_size=7,stride=2,padding=1,bias=True)
+        self.conv1 = nn.Conv2d(in_channels=3,out_channels=64,kernel_size=7,stride=2,padding=3,bias=True)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(3,2,1)
-        
+
+         
         self.lyr1conv1 = nn.Conv2d(in_channels=64,out_channels=64,kernel_size=3,stride=1,padding=1,bias=True) 
         self.lyr1bn1 = nn.BatchNorm2d(64)
         self.lyr1relu1 = nn.ReLU(inplace=True)
@@ -247,52 +249,56 @@ class CustomResnet(nn.Module): # Extend PyTorch's Module class
     def forward(self, x):
         # Here you have to define the forward pass
         # Make sure you take care of the skip connections
-        print (x.size())
+        # print (type(x))
+        # x = torch.ByteTensor(x)
+        # print (x.size())
         out = self.conv1(x)
-        print (out.size())
+        # print (out.size())
         out = self.bn1(out)
-        print (out.size())
+        # print (out.size())
         self.relu(out)
-        print (out.size())
+        # print (out.size())
         out = self.maxpool(out)
-        print (out.size())
+        # print (out.size())      
 
         out1 = self.lyr1conv1(out)
-        print (out1.size())
+        # print (out1.size())
         out1 = self.lyr1bn1(out1)
-        print (out1.size())
+        # print (out1.size())
         self.lyr1relu1(out1)
-        print (out1.size())
+        # print (out1.size())
         out1 = self.lyr1conv2(out1)
-        print (out1.size())
+        # print (out1.size())
         out1 = self.lyr1bn2(out1)
-        print (out1.size())
+        # print (out1.size())  
 
         out = out + out1
-        print (out.size())
+        # print (out.size())
         self.lyr1relu2(out)
-        print (out.size())
+        # print (out.size())
 
         out1 = self.lyr2conv1(out)
-        print (out1.size())
+        # print (out1.size())
         out1 = self.lyr2bn1(out1)
-        print (out1.size())
+        # print (out1.size())
         self.lyr2relu1(out1)
-        print (out1.size())
+        # print (out1.size())
         out1 = self.lyr2conv2(out1)
-        print (out1.size())
+        # print (out1.size())
         out1 = self.lyr2bn2(out1)
-        print (out1.size())
+        # print (out1.size())
 
         out = out + out1
-        print (out.size())
+        # print (out.size())
         self.lyr2relu2(out)
 
-        print (out.size())
+        # print (out.size())
 
+        out = out.view(out.size(0), -1)
+        # print (out.size())
         out = self.fc(out)
         
-        print (out.size())
+        # print (out.size())
         return out
 
 
@@ -300,13 +306,18 @@ class CustomResnet(nn.Module): # Extend PyTorch's Module class
 # We shall now finetune our model using pretrained CIFAR-100 weights.
 
 # In[ ]:
+def unpickle(file):
+    
+    with open(file, 'rb') as fo:
+        dict = cPickle.load(fo)
+    return dict
 
 
 model = CustomResnet(num_classes = 100) # 100 classes since CIFAR-100 has 100 classes
 
 # Load CIFAR-100 weights. (Download them from assignment page)
 # If network was properly implemented, weights should load without any problems
-# model.load_state_dict(torch.load('CIFAR-100_weights', map_location=lambda storage, loc: storage)) # Supply the path to the weight file
+model.load_state_dict(torch.load('CIFAR-100_weights', map_location=lambda storage, loc: storage)) # Supply the path to the weight file
 
 
 # ##### Optional
@@ -316,13 +327,46 @@ model = CustomResnet(num_classes = 100) # 100 classes since CIFAR-100 has 100 cl
 
 
 # Block for optionally running the model on CIFAR-100 test set
+print ("Doing Sanity Check")
+
+def sanity_test(model, features, labels, total_images):
+    # Write loops for testing the model on the test set
+    # You should also print out the accuracy of the model
+    features = torch.from_numpy(features).float()
+    labels = torch.from_numpy(np.array(labels))
+    i = 0
+    correct = 0
+    while i < total_images:
+        current_features = Variable(features[i:i+batch_size])
+        current_labels = labels[i:i+batch_size]
+
+        outputs = model(current_features)
+        _, predicted = torch.max(outputs.data, 1)
+
+        correct += (predicted.cpu() == current_labels.cpu()).sum()
+
+        i += batch_size
+
+    print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total_images))
+    return (100 * correct / total_images)
+
+   
+
+data_dict = unpickle(cifar_100)
+total_images = len(data_dict['fine_labels'])
+features = data_dict['data'].reshape(total_images, 3, 32, 32)
+labels = data_dict['fine_labels']
+# print (feature.shape)
+sanity_test(model, features, labels, total_images)
+
+
 
 
 # Let's finetune the model.
 
 # In[ ]:
 
-
+'''
 # Change last layer to output 10 classes since our dataset has 10 classes
 model.fc = nn.Linear(model.fc.in_features, numClasses)# Complete this statement. It is similar to the resnet18 case
 
@@ -337,15 +381,15 @@ def train():
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(train_loader):  
             # Convert torch tensor to Variable           
-            images_ = Variable(images)
+            images = Variable(images)
             labels = Variable(labels)
             if(use_gpu):
                 images=images.cuda()
                 labels=labels.cuda()
             # Forward + Backward + Optimize
             optimizer.zero_grad()  # zero the gradient buffer
-            final_image = torch.cat((images_, images_, images_), 1)
-            outputs = model(final_image)
+            images = torch.cat((images, images, images), 1)
+            outputs = model(images)
 
             loss = criterion(outputs, labels)
             loss.backward()
@@ -398,8 +442,8 @@ def test(model):
 # test(model)
 
 # Reinstantiate the model and optimizer
-model = CustomResnet(num_classes = 10)
-optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+# model = CustomResnet(num_classes = 10)
+# optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
 # model.load_state_dict(torch.load('CIFAR-100_weights'))
 train()
 test(model)
@@ -412,3 +456,4 @@ test(model)
 
 
 # This is the end of Assignment 1
+'''
