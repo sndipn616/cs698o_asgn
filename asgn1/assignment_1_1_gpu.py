@@ -22,6 +22,7 @@ import torch
 import numpy as np
 import torchvision
 import unicodedata
+import cPickle as pkl
 from PIL import Image
 import torch.nn as nn
 import torch.utils.data
@@ -44,13 +45,15 @@ with torch.cuda.device(1):
 
     root_dir = 'notMNIST_small'
     batch_size = 5
-    num_epochs = 3
-    learning_rate = 0.01
+    num_epochs = 5
+    learning_rate = 0.001
     num_classes = 10
     use_gpu = True
-    model_file_vgg = 'vgg16_freeze'
-    model_file_resnet = 'resnet18_freeze'
-
+    model_file_vgg = 'vgg16_not_freeze2'
+    model_file_resnet = 'resnet18_not_freeze2'
+    vgg16_loss_file = 'vgg16_loss_not_freeze2.txt'
+    resnet18_loss_file = 'resnet18_loss_not_freeze2.txt'
+    result_file = 'result.txt'
 
     # ### Creating Custom Datasets
     # Your first task is to create a pipeline for the custom dataset so that you can load it using a dataloader. Download the dataset provided in the assignment webpage and complete the following block of code so that you can load it as if it was a standard dataset.
@@ -103,7 +106,14 @@ with torch.cuda.device(1):
             else:
                 img, target = self.test_data[idx], self.test_labels[idx]
 
-           
+            # doing this so that it is consistent with all other datasets
+            # to return a PIL Image
+            # print (img)
+            # img = Image.fromarray(img.numpy(), mode='L')
+
+            # if self.transform is not None:
+            #     img = self.transform(img)        
+
             return img, target
 
         def GetChar(self, direc):
@@ -150,12 +160,16 @@ with torch.cuda.device(1):
                     if self.transform is not None:
                         image = self.transform(image)
 
-                    train_images.append(image)                      
-                    train_labels.append(self.GetChar(direc))
+                    train_images.append(image) 
                     
+                    # print (type(temp))                           
+                    train_labels.append(self.GetChar(direc))
+                    # image.close()
             train_labels = np.array(train_labels)
             train_labels = torch.from_numpy(train_labels)
-            
+            # print (len(train_labels[1]))
+            # print (np.array(train_labels).shape)
+            # train_labels = torch.LongTensor(train_labels)
             training_set = (train_images,train_labels)
 
             for direc in os.listdir(os.path.join(self.root_dir, self.test_folder)):
@@ -171,9 +185,11 @@ with torch.cuda.device(1):
                     test_labels.append(self.GetChar(direc))
                     
 
+                    # image.close()
             test_labels = np.array(test_labels)
             test_labels = torch.from_numpy(test_labels)
-
+            # print (test_labels)
+            # test_labels = torch.LongTensor(test_labels)
             test_set = (test_images, test_labels)
 
             with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
@@ -207,7 +223,23 @@ with torch.cuda.device(1):
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
         plt.show()
         
-    
+    # train_dataiter = iter(train_loader)
+    # train_images, train_labels = train_dataiter.next()
+    # print("Train images")
+    # imshow(torchvision.utils.make_grid(train_images))
+
+
+    # test_dataiter = iter(test_loader)
+    # test_images, test_labels = test_dataiter.next()
+    # print("Test images")
+    # imshow(torchvision.utils.make_grid(test_images))
+    # print(test_images[0].shape)
+    # print(test_labels)
+    # print(type(test_images))
+    # print(type(test_labels))
+
+
+
     # ### VGG-16 and Resnet-18
     # Now that you have created the dataset we can use it for training and testing neural networks. VGG-16 and Resnet-18 are both well-known deep-net architectures. VGG-16 is named as such since it has 16 layers in total (13 convolution and 3 fully-connected). Resnet-18 on the other hand is a Resnet architecture that uses skip-connections. PyTorch provides pre-trained models of both these architectures and we shall be using them directly. If you are interested in knowing how they have been defined do take a look at the source, [VGG](https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py), [Resnet](https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py)
 
@@ -218,10 +250,10 @@ with torch.cuda.device(1):
     resnet18 = models.resnet18(pretrained=True)
 
     for param in vgg16.parameters():
-        param.requires_grad = False
+        param.requires_grad = True
 
     for param in resnet18.parameters():
-        param.requires_grad = False
+        param.requires_grad = True
 
     # Code to change the last layers so that they only have 10 classes as output
     vgg16.classifier = nn.Sequential(
@@ -240,7 +272,7 @@ with torch.cuda.device(1):
     if use_gpu:
     	print ("Converting models for GPU")
     	vgg16.cuda()
-   	    resnet18.cuda()
+        resnet18.cuda()
 
     # vgg16.load_state_dict(torch.load(model_file_vgg))
     # resnet18.load_state_dict(torch.load(model_file_resnet))
@@ -250,7 +282,7 @@ with torch.cuda.device(1):
 
 
     criterion = nn.CrossEntropyLoss()   # Define cross-entropy loss
-    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
+    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 10.0) # Use Adam optimizer, use learning_rate hyper parameter
     optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
 
 
@@ -259,62 +291,84 @@ with torch.cuda.device(1):
 
     # In[ ]:
 
+    def save_loss(loss,filename):
+	with open(filename, "wb") as fp:
+		pkl.dump(loss,fp)
 
-    def train_vgg16():
+    def get_loss(filename):
+	with open(filename, "rb") as fp:
+		temp = pkl.load(fp)
+		return temp 
+
+    def train_vgg16(sl):
         # Write loops so as to train the model for N epochs, use num_epochs hyper parameter
         # Train/finetune the VGG-16 network
         # Store the losses for every epoch and generate a graph using matplotlib
         # print ("Here")
         print ("Training VGG")
+	    loss_vgg16 = []
         for epoch in range(num_epochs):
             for i, (images, labels) in enumerate(train_loader):  
                 # Convert torch tensor to Variable           
-              
+                #images_ = Variable(images)
+                #labels = Variable(labels)
                 if(use_gpu):
                     images=Variable(images.cuda())
                     labels=Variable(labels.cuda())
+#    	    	else:
+ #   		    images=Variable(images)
+  #  		    labels=Variable(labels)
 
                 # Forward + Backward + Optimize
                 optimizer_vgg16.zero_grad()  # zero the gradient buffer
                 images = torch.cat((images, images, images), 1)
-                outputs = vgg16(images,volatile=True)
+                outputs = vgg16(images)
 
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer_vgg16.step()
-                
-                if (i+1) % 10 == 0:
+                # sys.exit()
+                if (i+1) % 100 == 0:
                     print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                            %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+		    
+		    loss_vgg16.append(loss.data[0])
 
-        torch.save(vgg16.state_dict(), model_file_vgg)
+        torch.save(vgg16.state_dict(), model_file_vgg + str(sl))
+        save_loss(loss_vgg16,vgg16_loss_file)
                 # if i == 2000:
                 #     break
        
     def train_resnet18():
         # Same as above except now using the Resnet-18 network
         print ("Training Resnet")
+	    loss_resnet18 = []
         for epoch in range(num_epochs):
             for i, (images, labels) in enumerate(train_loader):  
                 # Convert torch tensor to Variable           
- 
+                #images_ = Variable(images)
+                #labels = Variable(labels)
                 if(use_gpu):
                     images=Variable(images.cuda())
                     labels=Variable(labels.cuda())
                 # Forward + Backward + Optimize
                 optimizer_resnet18.zero_grad()  # zero the gradient buffer
                 images = torch.cat((images, images, images), 1)
-                outputs = resnet18(images,volatile=True)
+                outputs = resnet18(images)
 
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer_resnet18.step()
-
-                if (i+1) % 10 == 0:
+                # sys.exit()
+                if (i+1) % 100 == 0:
                     print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                            %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+		    loss_resnet18.append(loss.data[0])
 
         torch.save(resnet18.state_dict(), model_file_resnet)
+	    save_loss(loss_resnet18,resnet18_loss_file)
+                # if i == 2000:
+                #     break
 
 
     # Now let us start the training/finetuning
@@ -339,13 +393,15 @@ with torch.cuda.device(1):
         total = 0
         print ("Testing")
         for images, labels in test_loader:
+    #        images = Variable(images)
             
             if(use_gpu):
                 images = Variable(images.cuda())
-
+#    	else:
+ #   	    images = Variable(images)
                 
             images = torch.cat((images, images, images), 1)
-            outputs = model(images,volatile=True)
+            outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted.cpu() == labels.cpu()).sum()
@@ -364,13 +420,33 @@ with torch.cuda.device(1):
 
     # You can add more code to save the models if you want but otherwise this notebook is complete
     '''
-    f = open('result_freeze_layer.txt', 'w')
-    train_vgg16()
-    acc = test(vgg16)
-    f.write(str(acc) + "\n")
+    criterion = nn.CrossEntropyLoss()   # Define cross-entropy loss
+    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 10.0) # Use Adam optimizer, use learning_rate hyper parameter
+    optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
 
+
+    f = open(result_file, 'w')
+    #train_vgg16(1)
+    vgg16.load_state_dict(torch.load(model_file_vgg+str(1)))
+    acc = test(vgg16)
+    f.write('lr=lr/10' + str(acc) + "\n")
+
+    #train_resnet18()
+    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 100.0)
+    #num_epochs = 10
+    num_epochs = 1
+    train_vgg16(2)
+    acc = test(vgg16)
+    f.write('lr=lr/100' + str(acc) + "\n")
+
+    optimizer_vgg16 = torch.optim.RMSprop(vgg16.parameters(), lr = learning_rate / 100)
+    train_vgg16(3)
+    acc = test(vgg16)
+    f.write('rmsprop' + str(acc) + '\n')
+
+    #num_epochs = 5
     train_resnet18()
-    acc = test(resnet18)
-    f.write(str(acc) + "\n")
+    acc = test(resnet)
+    f.write(str(acc) + '\n')
 
     f.close()
