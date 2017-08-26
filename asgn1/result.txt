@@ -1,0 +1,2 @@
+Accuracy of VGG16 with learning rate = 0.0001 : 95.3475935829
+Accuracy of RESNET18 with learning rate = 0.01 : 89.1443850267

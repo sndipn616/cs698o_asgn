@@ -1,0 +1,1 @@
+Accuracy of Custom RESNET with learning rate = 0.01 90.5347593583

@@ -42,12 +42,12 @@ import matplotlib.pyplot as plt
 with torch.cuda.device(2):
 
     root_dir = 'notMNIST_small'
-    batch_size = 5
-    num_epochs = 3
+    batch_size = 10
+    num_epochs = 5
     learning_rate = 0.01
     numClasses = 10
     use_gpu = True
-    model_file = 'custom_resnet_trained'
+    #model_file = 'custom_resnet_trained'
     model_file_resnet = 'custom_resnet'
     cifar_100 = 'cifar-100-python/test'
 
@@ -318,7 +318,7 @@ with torch.cuda.device(2):
 
     # Load CIFAR-100 weights. (Download them from assignment page)
     # If network was properly implemented, weights should load without any problems
-    model.load_state_dict(torch.load('CIFAR-100_weights', map_location=lambda storage, loc: storage)) # Supply the path to the weight file
+    model.load_state_dict(torch.load('CIFAR-100_weights')) # Supply the path to the weight file
 
 
     # ##### Optional
@@ -353,12 +353,12 @@ with torch.cuda.device(2):
 
        
 
-    # data_dict = unpickle(cifar_100)
-    # total_images = len(data_dict['fine_labels'])
-    # features = data_dict['data'].reshape(total_images, 3, 32, 32)
-    # labels = data_dict['fine_labels']
+    data_dict = unpickle(cifar_100)
+    total_images = len(data_dict['fine_labels'])
+    features = data_dict['data'].reshape(total_images, 3, 32, 32)
+    labels = data_dict['fine_labels']
     # print (feature.shape)
-    # sanity_test(model, features, labels, total_images)
+    sanity_test(model, features, labels, total_images)
 
 
 
@@ -369,11 +369,11 @@ with torch.cuda.device(2):
 
 
     # Change last layer to output 10 classes since our dataset has 10 classes
-    model.fc = nn.Linear(model.fc.in_features, numClasses)# Complete this statement. It is similar to the resnet18 case
+    model.fc = nn.Linear(model.fc.in_features, numClasses) # Complete this statement. It is similar to the resnet18 case
 
     # Loss function and optimizers
-    criterion = nn.CrossEntropyLoss()# Define cross-entropy loss
-    optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+    criterion = nn.CrossEntropyLoss() # Define cross-entropy loss
+    optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
 
     if use_gpu:
         model.cuda()
@@ -436,19 +436,23 @@ with torch.cuda.device(2):
         return (100 * correct / total)
         
     # get_ipython().magic(u'time test()')
-
-    train('custom_resnet_type-1')
-    test(model)
+    
+    f = open('result_part2.txt', 'w')
+    train('custom_resnet_model')
+    acc = test(model)
+    f.write("Accuracy of Custom RESNET with learning rate = 0.01 " + str(acc)+'\n')
 
     # Reinstantiate the model and optimizer
-    model = CustomResnet(num_classes = 10)
-    optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
-    model.load_state_dict(torch.load('CIFAR-100_weights'))
+    #model = CustomResnet(num_classes = 10)
+    #optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+   # model.load_state_dict(torch.load('CIFAR-100_weights'))
 
-    model.cuda()
+    #model.cuda()
 
-    train('custom_resnet_type-2')
-    test(model)
+    #train('custom_resnet_type-2')
+    #acc = test(model)
+    #f.write(str(acc)+'\n')
+    f.close()
     
     '''
     # Train
