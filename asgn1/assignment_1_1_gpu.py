@@ -46,13 +46,13 @@ with torch.cuda.device(1):
     root_dir = 'notMNIST_small'
     batch_size = 5
     num_epochs = 5
-    learning_rate = 0.001
+    learning_rate = 0.01
     num_classes = 10
     use_gpu = True
-    model_file_vgg = 'vgg16_not_freeze2'
-    model_file_resnet = 'resnet18_not_freeze2'
-    vgg16_loss_file = 'vgg16_loss_not_freeze2.txt'
-    resnet18_loss_file = 'resnet18_loss_not_freeze2.txt'
+    model_file_vgg = 'vgg16_model_final'
+    model_file_resnet = 'resnet18_model_final'
+    vgg16_loss_file = 'vgg16_loss.txt'
+    resnet18_loss_file = 'resnet18_loss.txt'
     result_file = 'result.txt'
 
     # ### Creating Custom Datasets
@@ -282,8 +282,8 @@ with torch.cuda.device(1):
 
 
     criterion = nn.CrossEntropyLoss()   # Define cross-entropy loss
-    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 10.0) # Use Adam optimizer, use learning_rate hyper parameter
-    optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate)# Use Adam optimizer, use learning_rate hyper parameter
+    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 100.0) # Use Adam optimizer, use learning_rate hyper parameter
+    optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
 
 
     # #### Finetuning
@@ -306,7 +306,7 @@ with torch.cuda.device(1):
         # Store the losses for every epoch and generate a graph using matplotlib
         # print ("Here")
         print ("Training VGG")
-	    loss_vgg16 = []
+	loss_vgg16 = []
         for epoch in range(num_epochs):
             for i, (images, labels) in enumerate(train_loader):  
                 # Convert torch tensor to Variable           
@@ -335,14 +335,14 @@ with torch.cuda.device(1):
 		    loss_vgg16.append(loss.data[0])
 
         torch.save(vgg16.state_dict(), model_file_vgg + str(sl))
-        save_loss(loss_vgg16,vgg16_loss_file)
+	save_loss(loss_vgg16,vgg16_loss_file)
                 # if i == 2000:
                 #     break
        
     def train_resnet18():
         # Same as above except now using the Resnet-18 network
         print ("Training Resnet")
-	    loss_resnet18 = []
+	loss_resnet18 = []
         for epoch in range(num_epochs):
             for i, (images, labels) in enumerate(train_loader):  
                 # Convert torch tensor to Variable           
@@ -366,7 +366,7 @@ with torch.cuda.device(1):
 		    loss_resnet18.append(loss.data[0])
 
         torch.save(resnet18.state_dict(), model_file_resnet)
-	    save_loss(loss_resnet18,resnet18_loss_file)
+	save_loss(loss_resnet18,resnet18_loss_file)
                 # if i == 2000:
                 #     break
 
@@ -420,33 +420,36 @@ with torch.cuda.device(1):
 
     # You can add more code to save the models if you want but otherwise this notebook is complete
     '''
-    criterion = nn.CrossEntropyLoss()   # Define cross-entropy loss
-    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 10.0) # Use Adam optimizer, use learning_rate hyper parameter
-    optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
+    #criterion = nn.CrossEntropyLoss()   # Define cross-entropy loss
+    #optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 10.0) # Use Adam optimizer, use learning_rate hyper parameter
+    #optimizer_resnet18 = torch.optim.Adam(resnet18.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
 
 
     f = open(result_file, 'w')
-    #train_vgg16(1)
-    vgg16.load_state_dict(torch.load(model_file_vgg+str(1)))
+    train_vgg16(1)
+    #vgg16.load_state_dict(torch.load(model_file_vgg+str(1)))
     acc = test(vgg16)
-    f.write('lr=lr/10' + str(acc) + "\n")
+    f.write("Accuracy of VGG16 with learning rate = 0.0001 : " + str(acc) + "\n")
 
     #train_resnet18()
-    optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 100.0)
+    #optimizer_vgg16 = torch.optim.Adam(vgg16.parameters(), lr = learning_rate / 100.0)
     #num_epochs = 10
-    num_epochs = 1
-    train_vgg16(2)
-    acc = test(vgg16)
-    f.write('lr=lr/100' + str(acc) + "\n")
+    #num_epochs = 1
+    #train_vgg16(2)
+    #vgg16.load_state_dict(torch.load(model_file_vgg+str(2)))
+    #acc = test(vgg16)
+    #f.write('lr=lr/100 ' + str(acc) + "\n")
 
-    optimizer_vgg16 = torch.optim.RMSprop(vgg16.parameters(), lr = learning_rate / 100)
-    train_vgg16(3)
-    acc = test(vgg16)
-    f.write('rmsprop' + str(acc) + '\n')
+    #optimizer_vgg16 = torch.optim.RMSprop(vgg16.parameters(), lr = learning_rate / 100)
+    #train_vgg16(3)
+    #vgg16.load_state_dict(torch.load(model_file_vgg+str(3)))
+    #acc = test(vgg16)
+    #f.write('rmsprop ' + str(acc) + '\n')
 
+    #f = open('result_resnet.txt','w')
     #num_epochs = 5
     train_resnet18()
-    acc = test(resnet)
-    f.write(str(acc) + '\n')
+    acc = test(resnet18)
+    f.write("Accuracy of RESNET18 with learning rate = 0.01 : " + str(acc) + '\n')
 
     f.close()
