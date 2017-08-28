@@ -33,7 +33,6 @@ import torchvision.transforms as transforms
 # get_ipython().magic(u'matplotlib inline')
 import matplotlib.pyplot as plt
 
-
 # All hyper parameters go in the next block
 
 # In[ ]:
@@ -44,12 +43,14 @@ with torch.cuda.device(2):
     root_dir = 'notMNIST_small'
     batch_size = 10
     num_epochs = 5
-    learning_rate = 0.01
+    learning_rate_list = [0.1, 0.01, 0.001, 0.0001, 0.00001]
     numClasses = 10
     use_gpu = True
     #model_file = 'custom_resnet_trained'
-    model_file_resnet = 'custom_resnet'
+    model_file_resnet = 'custom_resnet_model'
+    loss_file = 'custom_resnet_loss'
     cifar_100 = 'cifar-100-python/test'
+    result_file = 'result_2.txt'
 
 
     # ### Create Custom Dataset and Loader
@@ -348,7 +349,7 @@ with torch.cuda.device(2):
 
             i += batch_size
 
-        print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total_images))
+        print('Accuracy of the network with pre-trained weights on cifar-100 dataset : %d %%' % (100 * correct / total_images))
         return (100 * correct / total_images)
 
        
@@ -369,20 +370,21 @@ with torch.cuda.device(2):
 
 
     # Change last layer to output 10 classes since our dataset has 10 classes
-    model.fc = nn.Linear(model.fc.in_features, numClasses) # Complete this statement. It is similar to the resnet18 case
+    # model.fc = nn.Linear(model.fc.in_features, numClasses) # Complete this statement. It is similar to the resnet18 case
 
     # Loss function and optimizers
-    criterion = nn.CrossEntropyLoss() # Define cross-entropy loss
-    optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
+    def save_loss(loss,filename):
+        with open(filename, "wb") as fp:
+            cPickle.dump(loss,fp)
 
     if use_gpu:
         model.cuda()
 
-    def train(file):
+    def train(sl):
         # Code for training the model
         # Make sure to output a matplotlib graph of training losses
         print ("Training Resnet")
-        model_file_resnet = file
+        loss_resnet = []
         for epoch in range(num_epochs):
             for i, (images, labels) in enumerate(train_loader):  
                 # Convert torch tensor to Variable           
@@ -403,8 +405,10 @@ with torch.cuda.device(2):
                 if (i+1) % 10 == 0:
                     print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f' 
                            %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data[0]))
+                    loss_resnet.append(loss.data[0])
 
-        torch.save(model.state_dict(), model_file_resnet)
+        torch.save(model.state_dict(), model_file_resnet + str(sl))
+        save_loss(loss_resnet,loss_file + str(sl) + ".txt")
 
     # get_ipython().magic(u'time train()')
 
@@ -432,15 +436,28 @@ with torch.cuda.device(2):
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted.cpu() == labels.cpu()).sum()
-        print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
+        print('Accuracy of the network after training on notMNIST small dataset : %d %%' % (100 * correct / total))
         return (100 * correct / total)
         
     # get_ipython().magic(u'time test()')
-    
-    f = open('result_part2.txt', 'w')
-    train('custom_resnet_model')
-    acc = test(model)
-    f.write("Accuracy of Custom RESNET with learning rate = 0.01 " + str(acc)+'\n')
+    f = open(result_file, 'w')
+    for learning_rate in learning_rate_list:        
+        model = CustomResnet(num_classes = 10)
+        criterion = nn.CrossEntropyLoss() # Define cross-entropy loss
+        optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate) # Use Adam optimizer, use learning_rate hyper parameter
+
+        train(learning_rate)
+        acc = test(model)
+        f.write("Accuracy of Custom RESNET with learning rate = " + str(learning_rate) + " : " + str(acc) + "\n")      
+
+
+    f.close()
+
+
+    # f = open('result_part2.txt', 'w')
+    # train('custom_resnet_model')
+    # acc = test(model)
+    # f.write("Accuracy of Custom RESNET with learning rate = 0.01 " + str(acc)+'\n')
 
     # Reinstantiate the model and optimizer
     #model = CustomResnet(num_classes = 10)
@@ -452,7 +469,7 @@ with torch.cuda.device(2):
     #train('custom_resnet_type-2')
     #acc = test(model)
     #f.write(str(acc)+'\n')
-    f.close()
+    # f.close()
     
     '''
     # Train
