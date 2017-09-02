@@ -126,12 +126,18 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       object_map = {}
       for obj in root.iter('object'):
         name = obj.find('name').text
-        object_map[name] = {}
+        if name not in object_map:
+          object_map[name] = []
+
+        temp = {}
         bnd = neighbor.find('bndbox')
-        object_map[name]['xmin'] = int(bnd.find('xmin').text)
-        object_map[name]['ymin'] = int(bnd.find('ymin').text)
-        object_map[name]['xmax'] = int(bnd.find('xmax').text)
-        object_map[name]['ymax'] = int(bnd.find('ymax').text)  
+
+        temp['xmin'] = int(bnd.find('xmin').text)
+        temp['ymin'] = int(bnd.find('ymin').text)
+        temp['xmax'] = int(bnd.find('xmax').text)
+        temp['ymax'] = int(bnd.find('ymax').text)
+
+        object_map[name].append(temp)  
         
       return object_map
 
@@ -159,18 +165,19 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         if name not in classes:
           continue
 
-        xmin = object_map[name]['xmin']
-        ymin = object_map[name]['ymin']
-        xmax = object_map[name]['xmax']
-        ymax = object_map[name]['ymax']
+        for temp in object_map[name]:
+          xmin = temp['xmin']
+          ymin = temp['ymin']
+          xmax = temp['xmax']
+          ymax = temp['ymax']
 
-        image2 = image.crop((xmin, ymin, xmax, ymax))
+          image2 = image.crop((xmin, ymin, xmax, ymax))
 
-        if self.transform is not None:
-          image2 = self.transform(image2)
+          if self.transform is not None:
+            image2 = self.transform(image2)
 
-        train_images.append(image)
-        train_labels.append(map_classes[name])
+          train_images.append(image2)
+          train_labels.append(map_classes[name])
 
 
     train_labels = np.array(train_labels)
