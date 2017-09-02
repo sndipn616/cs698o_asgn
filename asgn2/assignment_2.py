@@ -20,16 +20,21 @@ import torch
 import torch.utils.data
 import torchvision.transforms as transforms
 from torch.autograd import Variable
+import xml.etree.ElementTree
 import matplotlib.pyplot as plt
-get_ipython().magic(u'matplotlib inline')
-plt.ion()
-# You can ask Varys to get you more if you desire
+import torchvision.models as models
+import torchvision.transforms as transforms
+import xml.etree.ElementTree as et
+
+# get_ipython().magic(u'matplotlib inline')
+# plt.ion()
 
 
 # In[ ]:
 
 
-resnet_input = #size of resnet18 input images
+# You can ask Varys to get you more if you desire
+resnet_input = 32  #size of resnet18 input images
 
 
 # In[ ]:
@@ -66,10 +71,12 @@ classes = ('__background__',
 
 
 # In[ ]:
-
-
-def jamie_bronn_build_dataset():
-    # Begin
+map_classes = {'__background__' : 0,
+           'aeroplane' : 1, 'bicycle' : 2, 'bird' : 3, 'boat' : 4,
+           'bottle' : 5, 'bus' : 6, 'car' : 7, 'cat' : 8, 'chair' : 9,
+           'cow' : 10, 'diningtable' : 11, 'dog' : 12, 'horse' : 13,
+           'motorbike' : 14, 'person' : 15, 'pottedplant' : 16,
+           'sheep' : 17, 'sofa' : 18, 'train' : 19, 'tvmonitor' : 20}
 
 
 # In[ ]:
@@ -77,14 +84,125 @@ def jamie_bronn_build_dataset():
 
 class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
     def __init__(self, root_dir, train, transform=None):
-        # Begin
+      # Begin
+      self.train = train
+      self.root_dir = root_dir
+      self.transform = transform
+      self.training_folder = 'VOCdevkit_Train/VOC2007/JPEGImages'
+      self.test_folder = 'VOCdevkit_Test/VOC2007/JPEGImages'
+      self.annotation_training = 'VOCdevkit_Train/VOC2007/Annotations'
+      self.annotation_test = 'VOCdevkit_Test/VOC2007/Annotations'
+      self.training_file = 'training.pt'
+      self.test_file = 'test.pt'
+      self.processed_folder = 'Processed'
+
+      if not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.training_file)) and not os.path.exists(self.root_dir, os.path.join(self.processed_folder, self.test_file)):
+        jamie_bronn_build_dataset()
+
+      if self.train:        
+        self.train_data, self.train_labels = torch.load(os.path.join(self.root_dir, self.processed_folder, self.training_file))
+      else:
+        self.test_data, self.test_labels = torch.load(os.path.join(self.root_dir, self.processed_folder, self.test_file))
         
     def __len__(self):
-        # Begin
+      # Begin
+      if self.train:
+        return len(self.train_data)
+      else:
+        return len(self.test_data)
         
     def __getitem__(self, idx):
-       # Begin
+      # Begin
+      if self.train:
+        img, target = self.train_data[idx], self.train_labels[idx]
+      else:
+        img, target = self.test_data[idx], self.test_labels[idx]
+
+      return img, target
+
+    def parse_xml(filename):
+      tree = et.parse(filename)
+      root = tree.getroot()
+      object_map = {}
+      for obj in root.iter('object'):
+        name = obj.find('name').text
+        object_map[name] = {}
+        bnd = neighbor.find('bndbox')
+        object_map[name]['xmin'] = int(bnd.find('xmin').text)
+        object_map[name]['ymin'] = int(bnd.find('ymin').text)
+        object_map[name]['xmax'] = int(bnd.find('xmax').text)
+        object_map[name]['ymax'] = int(bnd.find('ymax').text)  
+        
+      return object_map
+
+
+    def jamie_bronn_build_dataset():
+    # Begin
+    if not os.path.exists(os.path.join(self.root_dir, self.processed_folder)):
+      os.makedirs(os.path.join(self.root_dir, self.processed_folder))    #Create new folder
+
+    train_images = []
+    train_labels = []
+    test_images = []
+    test_labels = []
+
     
+    for img in os.listdir(os.path.join(self.root_dir, self.training_folder)):
+      annotation_file = os.path.join(self.root_dir, self.annotation_training, img.strip('jpg') + 'xml')
+      object_map = parse_xml(annotation_file)
+
+      image = imread(os.path.join(self.root_dir, self.training_folder, img))
+      image = torch.from_numpy(image)
+      image = Image.fromarray(image.numpy(), mode='L')
+
+      for name in object_map:
+        if name not in classes:
+          continue
+
+        xmin = object_map[name]['xmin']
+        ymin = object_map[name]['ymin']
+        xmax = object_map[name]['xmax']
+        ymax = object_map[name]['ymax']
+
+        image2 = image.crop((xmin, ymin, xmax, ymax))
+
+        if self.transform is not None:
+          image2 = self.transform(image2)
+
+        train_images.append(image)
+        train_labels.append(map_classes[name])
+
+
+    train_labels = np.array(train_labels)
+    train_labels = torch.from_numpy(train_labels)
+
+    training_set = (train_images,train_labels)
+
+    for direc in os.listdir(os.path.join(self.root_dir, self.test_folder)):
+      for img in os.listdir(os.path.join(self.root_dir, self.test_folder,direc)):
+        image = imread(os.path.join(self.root_dir, self.test_folder, direc, img))
+        image = torch.from_numpy(image)
+        image = Image.fromarray(image.numpy(), mode='L')
+
+        if self.transform is not None:
+          image = self.transform(image)
+
+        test_images.append(image)                            
+        test_labels.append(map_classes[direc])
+            
+
+            # image.close()
+    test_labels = np.array(test_labels)
+    test_labels = torch.from_numpy(test_labels)
+    # print (test_labels)
+    # test_labels = torch.LongTensor(test_labels)
+    test_set = (test_images, test_labels)
+
+    with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
+        torch.save(training_set, f)
+    with open(os.path.join(self.root_dir, self.processed_folder, self.test_file), 'wb') as f:
+        torch.save(test_set, f)
+
 
 
 # ## Train the netwok
@@ -134,7 +252,7 @@ def arya_train():
 # In[ ]:
 
 
-get_ipython().magic(u'time arya_train()')
+# get_ipython().magic(u'time arya_train()')
 
 
 # # Testing and Accuracy Calculation
@@ -171,7 +289,7 @@ def daenerys_test(resnet18):
 # In[ ]:
 
 
-get_ipython().magic(u'time daenerys_test(resnet18)')
+# get_ipython().magic(u'time daenerys_test(resnet18)')
 
 
 # # Final Showdown
