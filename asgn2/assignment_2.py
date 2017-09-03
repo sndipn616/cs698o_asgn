@@ -19,7 +19,9 @@ import numpy as np
 import torch
 import torch.utils.data
 import torchvision.transforms as transforms
+from PIL import Image
 from torch.autograd import Variable
+from scipy.ndimage import imread
 import xml.etree.ElementTree
 import matplotlib.pyplot as plt
 import torchvision.models as models
@@ -45,6 +47,7 @@ batch_size = 2
 num_epochs = 5
 learning_rate =  0.001
 hyp_momentum = 0.9
+root_dir = 'Data'
 
 
 # ## Build the data
@@ -120,6 +123,34 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
       return img, target
 
+    def get_int_over_union(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
+      x_len = min(xmax1,xmax2) - max(xmin1,xmin2)
+      y_len = min(ymax1,ymax2) - max(ymin1,ymin2) 
+
+      inter = 0
+
+      if x_len > 0 and y_len > 0:
+        inter = x_len * y_len
+
+      union = (xmax1 - xmin1) * (ymax1 - ymin1) + (xmax2 - xmin2) * (ymax2 - ymin2) - inter
+
+      return 1.0 * inter / union
+
+    def is_background(boxes, xmin, ymin, xmax, ymax):
+
+      for box in boxes:
+        xmin1 = box[0]
+        ymin1 = box[1]
+        xmax1 = box[2]
+        ymax1 = box[3]
+
+        if get_int_over_union(xmin, ymin, xmax, ymax, xmin1, ymin1, xmax1, ymax1) > 0.5:
+          return False
+
+      return True
+
+
+
     def parse_xml(filename):
       tree = et.parse(filename)
       root = tree.getroot()
@@ -161,15 +192,26 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       image = torch.from_numpy(image)
       image = Image.fromarray(image.numpy(), mode='L')
 
+      boxes = []
+
       for name in object_map:
         if name not in classes:
           continue
 
         for temp in object_map[name]:
+          temp2 = []
+
           xmin = temp['xmin']
           ymin = temp['ymin']
           xmax = temp['xmax']
           ymax = temp['ymax']
+
+          temp2.append(xmin)
+          temp2.append(ymin)
+          temp2.append(xmax)
+          temp2.append(ymax)
+
+          boxes.append(temp2)
 
           image2 = image.crop((xmin, ymin, xmax, ymax))
 
@@ -177,7 +219,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
             image2 = self.transform(image2)
 
           train_images.append(image2)
-          train_labels.append(map_classes[name])
+          train_labels.append(name)
 
 
     train_labels = np.array(train_labels)
@@ -185,30 +227,53 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
     training_set = (train_images,train_labels)
 
-    for direc in os.listdir(os.path.join(self.root_dir, self.test_folder)):
-      for img in os.listdir(os.path.join(self.root_dir, self.test_folder,direc)):
-        image = imread(os.path.join(self.root_dir, self.test_folder, direc, img))
-        image = torch.from_numpy(image)
-        image = Image.fromarray(image.numpy(), mode='L')
+    for img in os.listdir(os.path.join(self.root_dir, self.test_folder)):
+      annotation_file = os.path.join(self.root_dir, self.annotation_test, img.strip('jpg') + 'xml')
+      object_map = parse_xml(annotation_file)
 
-        if self.transform is not None:
-          image = self.transform(image)
+      image = imread(os.path.join(self.root_dir, self.test_folder, img))
+      width = 
 
-        test_images.append(image)                            
-        test_labels.append(map_classes[direc])
-            
+      image = torch.from_numpy(image)
+      image = Image.fromarray(image.numpy())
 
-            # image.close()
+      for name in object_map:
+        if name not in classes:
+          continue
+
+        for temp in object_map[name]:
+          temp2 = []
+
+          xmin = temp['xmin']
+          ymin = temp['ymin']
+          xmax = temp['xmax']
+          ymax = temp['ymax']
+
+          temp2.append(xmin)
+          temp2.append(ymin)
+          temp2.append(xmax)
+          temp2.append(ymax)
+
+          boxes.append(temp2)
+
+          image2 = image.crop((xmin, ymin, xmax, ymax))
+
+          if self.transform is not None:
+            image2 = self.transform(image2)
+
+          test_images.append(image2)
+          test_labels.append(name)
+
+
     test_labels = np.array(test_labels)
     test_labels = torch.from_numpy(test_labels)
-    # print (test_labels)
-    # test_labels = torch.LongTensor(test_labels)
-    test_set = (test_images, test_labels)
+
+    test_set = (test_images,test_labels)
 
     with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
-        torch.save(training_set, f)
+      torch.save(training_set, f)
     with open(os.path.join(self.root_dir, self.processed_folder, self.test_file), 'wb') as f:
-        torch.save(test_set, f)
+      torch.save(test_set, f)
 
 
 
@@ -218,22 +283,41 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 # In[ ]:
 
 
-composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)),
-                                         transforms.ToTensor(),
-                                         transforms.RandomHorizontalFlip()])
-train_dataset = hound_dataset(root_dir='', train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = hound_dataset(root_dir='', train=False, transform=composed_transform) # Supply proper root_dir
+composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor(),transforms.RandomHorizontalFlip()])
+train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+
+print('Size of train dataset: %d' % len(train_dataset))
+print('Size of test dataset: %d' % len(test_dataset))
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
+print ("Checking the training / test set")
+def imshow(img):
+  npimg = img.numpy()    
+  plt.imshow(np.transpose(npimg, (1, 2, 0)))
+  plt.show()
+
+train_dataiter = iter(train_loader)
+train_images, train_labels = train_dataiter.next()
+print("Train images")
+imshow(torchvision.utils.make_grid(train_images))
+
+
+test_dataiter = iter(test_loader)
+test_images, test_labels = test_dataiter.next()
+print("Test images")
+imshow(torchvision.utils.make_grid(test_images))
+
+print(test_labels)
 
 # ### Fine-tuning
 # Litlefinger has brought you a pre-trained network. Fine-tune the network in the following section:
 
 # In[ ]:
 
-
+'''
 resnet18 = models.resnet18(pretrained=True)
 
 resnet18.fc = nn.Linear(resnet18.fc.in_features, 21)
@@ -303,7 +387,4 @@ def daenerys_test(resnet18):
 # After covering all the steps and passing the accuracy value to the talking crystal, they all pass through to the land of the living, with a wounded Jon Snow armed with the Dragon-axe. After a fierce battle, Jon Snow manages to go face to face with the Night king. Surrounded by battling men and falling bodies, they engage in a ferocious battle, a battle of spear and axe. After a raging fight, Jon manages to sink the axe into the Night king's heart, but not before he gets wounded by the spear. As dead men fall to bones, Daenerys and others rush to his aid, but it is too late. Everyone is in tears as they look towards the man of honour, Jon Snow, lying in Daenerys's arms when he says his last words: "The night has ended. Winter is finally over!"
 
 # In[ ]:
-
-
-
-
+'''
