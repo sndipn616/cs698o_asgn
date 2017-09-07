@@ -15,8 +15,11 @@
 
 
 from __future__ import division, print_function, unicode_literals
-import numpy as np
+import os
+import sys
 import torch
+import random
+import numpy as np
 import torch.utils.data
 import torchvision.transforms as transforms
 from PIL import Image
@@ -99,8 +102,8 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       self.test_file = 'test.pt'
       self.processed_folder = 'Processed'
 
-      if not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.training_file)) and not os.path.exists(self.root_dir, os.path.join(self.processed_folder, self.test_file)):
-        jamie_bronn_build_dataset()
+      if not os.path.exists(os.path.join(self.root_dir, self.processed_folder, self.training_file)) and not os.path.exists( os.path.join(self.root_dir, self.processed_folder, self.test_file)):
+        self.jamie_bronn_build_dataset()
 
       if self.train:        
         self.train_data, self.train_labels = torch.load(os.path.join(self.root_dir, self.processed_folder, self.training_file))
@@ -151,7 +154,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 
 
-    def parse_xml(filename):
+    def parse_xml(self,filename):
       tree = et.parse(filename)
       root = tree.getroot()
       object_map = {}
@@ -161,7 +164,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
           object_map[name] = []
 
         temp = {}
-        bnd = neighbor.find('bndbox')
+        bnd = obj.find('bndbox')
 
         temp['xmin'] = int(bnd.find('xmin').text)
         temp['ymin'] = int(bnd.find('ymin').text)
@@ -173,108 +176,109 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       return object_map
 
 
-    def jamie_bronn_build_dataset():
-    # Begin
-    if not os.path.exists(os.path.join(self.root_dir, self.processed_folder)):
-      os.makedirs(os.path.join(self.root_dir, self.processed_folder))    #Create new folder
+    def jamie_bronn_build_dataset(self):
+      # Begin
+      if not os.path.exists(os.path.join(self.root_dir, self.processed_folder)):
+        os.makedirs(os.path.join(self.root_dir, self.processed_folder))    #Create new folder
 
-    train_images = []
-    train_labels = []
-    test_images = []
-    test_labels = []
+      train_images = []
+      train_labels = []
+      test_images = []
+      test_labels = []
 
-    
-    for img in os.listdir(os.path.join(self.root_dir, self.training_folder)):
-      annotation_file = os.path.join(self.root_dir, self.annotation_training, img.strip('jpg') + 'xml')
-      object_map = parse_xml(annotation_file)
+      
+      for img in os.listdir(os.path.join(self.root_dir, self.training_folder)):
+        annotation_file = os.path.join(self.root_dir, self.annotation_training, img.strip('jpg') + 'xml')
+        object_map = self.parse_xml(annotation_file)
 
-      image = imread(os.path.join(self.root_dir, self.training_folder, img))
-      image = torch.from_numpy(image)
-      image = Image.fromarray(image.numpy(), mode='L')
+        image = imread(os.path.join(self.root_dir, self.training_folder, img))
+        # image = torch.from_numpy(image)
+        image = Image.fromarray(image, mode='RGB')
 
-      boxes = []
+        boxes = []
 
-      for name in object_map:
-        if name not in classes:
-          continue
+        for name in object_map:
+          if name not in classes:
+            continue
 
-        for temp in object_map[name]:
-          temp2 = []
+          for temp in object_map[name]:
+            temp2 = []
 
-          xmin = temp['xmin']
-          ymin = temp['ymin']
-          xmax = temp['xmax']
-          ymax = temp['ymax']
+            xmin = temp['xmin']
+            ymin = temp['ymin']
+            xmax = temp['xmax']
+            ymax = temp['ymax']
 
-          temp2.append(xmin)
-          temp2.append(ymin)
-          temp2.append(xmax)
-          temp2.append(ymax)
+            temp2.append(xmin)
+            temp2.append(ymin)
+            temp2.append(xmax)
+            temp2.append(ymax)
 
-          boxes.append(temp2)
+            boxes.append(temp2)
 
-          image2 = image.crop((xmin, ymin, xmax, ymax))
+            image2 = image.crop((xmin, ymin, xmax, ymax))
 
-          if self.transform is not None:
-            image2 = self.transform(image2)
+            if self.transform is not None:
+              image2 = self.transform(image2)
+              
 
-          train_images.append(image2)
-          train_labels.append(name)
-
-
-    train_labels = np.array(train_labels)
-    train_labels = torch.from_numpy(train_labels)
-
-    training_set = (train_images,train_labels)
-
-    for img in os.listdir(os.path.join(self.root_dir, self.test_folder)):
-      annotation_file = os.path.join(self.root_dir, self.annotation_test, img.strip('jpg') + 'xml')
-      object_map = parse_xml(annotation_file)
-
-      image = imread(os.path.join(self.root_dir, self.test_folder, img))
-      height = image.shape[0]
-      width = image.shape[1]
-
-      image = torch.from_numpy(image)
-      image = Image.fromarray(image.numpy())
-
-      for name in object_map:
-        if name not in classes:
-          continue
-
-        for temp in object_map[name]:
-          temp2 = []
-
-          xmin = temp['xmin']
-          ymin = temp['ymin']
-          xmax = temp['xmax']
-          ymax = temp['ymax']
-
-          temp2.append(xmin)
-          temp2.append(ymin)
-          temp2.append(xmax)
-          temp2.append(ymax)
-
-          boxes.append(temp2)
-
-          image2 = image.crop((xmin, ymin, xmax, ymax))
-
-          if self.transform is not None:
-            image2 = self.transform(image2)
-
-          test_images.append(image2)
-          test_labels.append(name)
+            train_images.append(image2)
+            train_labels.append(name)
 
 
-    test_labels = np.array(test_labels)
-    test_labels = torch.from_numpy(test_labels)
+      train_labels = np.array(train_labels)
+      train_labels = torch.from_numpy(train_labels)
 
-    test_set = (test_images,test_labels)
+      training_set = (train_images,train_labels)
 
-    with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
-      torch.save(training_set, f)
-    with open(os.path.join(self.root_dir, self.processed_folder, self.test_file), 'wb') as f:
-      torch.save(test_set, f)
+      for img in os.listdir(os.path.join(self.root_dir, self.test_folder)):
+        annotation_file = os.path.join(self.root_dir, self.annotation_test, img.strip('jpg') + 'xml')
+        object_map = parse_xml(annotation_file)
+
+        image = imread(os.path.join(self.root_dir, self.test_folder, img))
+        height = image.shape[0]
+        width = image.shape[1]
+
+        # image = torch.from_numpy(image)
+        image = Image.fromarray(image, mode='RGB')
+
+        for name in object_map:
+          if name not in classes:
+            continue
+
+          for temp in object_map[name]:
+            temp2 = []
+
+            xmin = temp['xmin']
+            ymin = temp['ymin']
+            xmax = temp['xmax']
+            ymax = temp['ymax']
+
+            temp2.append(xmin)
+            temp2.append(ymin)
+            temp2.append(xmax)
+            temp2.append(ymax)
+
+            boxes.append(temp2)
+
+            image2 = image.crop((xmin, ymin, xmax, ymax))
+
+            if self.transform is not None:
+              image2 = self.transform(image2)              
+
+            test_images.append(image2)
+            test_labels.append(name)
+
+
+      test_labels = np.array(test_labels)
+      test_labels = torch.from_numpy(test_labels)
+
+      test_set = (test_images,test_labels)
+
+      with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
+        torch.save(training_set, f)
+      with open(os.path.join(self.root_dir, self.processed_folder, self.test_file), 'wb') as f:
+        torch.save(test_set, f)
 
 
 
@@ -284,7 +288,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 # In[ ]:
 
 
-composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor(),transforms.RandomHorizontalFlip()])
+composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor()])
 train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
 test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
