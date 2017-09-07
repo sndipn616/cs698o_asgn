@@ -21,6 +21,7 @@ import torch
 import random
 import numpy as np
 import torch.utils.data
+from scipy.stats import bernoulli
 import torchvision.transforms as transforms
 from PIL import Image
 from torch.autograd import Variable
@@ -40,7 +41,7 @@ import xml.etree.ElementTree as et
 
 # You can ask Varys to get you more if you desire
 resnet_input = 32  #size of resnet18 input images
-
+back_patch = 64
 
 # In[ ]:
 
@@ -51,7 +52,7 @@ num_epochs = 5
 learning_rate =  0.001
 hyp_momentum = 0.9
 root_dir = 'Data'
-
+back_class = '__background__'
 
 # ## Build the data
 # The hound who was in charge for getting the data, brought you the following links:
@@ -186,7 +187,11 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       test_images = []
       test_labels = []
 
-      
+      background_crop = transforms.Compose([transforms.RandomCrop(back_patch)])
+
+      index = 0
+      train_back = bernoulli.rvs(0.05, size=5100)
+      print ("Processing Train Dataset")
       for img in os.listdir(os.path.join(self.root_dir, self.training_folder)):
         annotation_file = os.path.join(self.root_dir, self.annotation_training, img.strip('jpg') + 'xml')
         object_map = self.parse_xml(annotation_file)
@@ -225,12 +230,26 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
             train_images.append(image2)
             train_labels.append(name)
 
+            if train_back[index] == 0:
+              continue
+
+        back_image = background_crop(Image)
+        if self.transform is not None:
+          back_image = self.transform(back_image)
+
+        train_images.append(back_image)
+        train_labels.append(back_class)
+
+        index += 1
 
       train_labels = np.array(train_labels)
       train_labels = torch.from_numpy(train_labels)
 
       training_set = (train_images,train_labels)
 
+      index = 0
+      test_back = bernoulli.rvs(0.05, size=5000)
+      print ("Processing Test Dataset")
       for img in os.listdir(os.path.join(self.root_dir, self.test_folder)):
         annotation_file = os.path.join(self.root_dir, self.annotation_test, img.strip('jpg') + 'xml')
         object_map = parse_xml(annotation_file)
@@ -268,6 +287,18 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
             test_images.append(image2)
             test_labels.append(name)
+
+        if test_back[index] == 0:
+          continue
+
+        back_image = background_crop(Image)
+        if self.transform is not None:
+          back_image = self.transform(back_image)
+
+        test_images.append(back_image)
+        test_labels.append(back_class)
+
+        index += 1
 
 
       test_labels = np.array(test_labels)
