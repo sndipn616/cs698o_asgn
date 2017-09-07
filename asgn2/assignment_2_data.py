@@ -19,11 +19,12 @@ import os
 import sys
 import torch
 import random
+import torchvision
 import numpy as np
 import torch.utils.data
 from scipy.stats import bernoulli
 import torchvision.transforms as transforms
-from PIL import Image
+from PIL import Image, ImageOps
 from torch.autograd import Variable
 from scipy.ndimage import imread
 import xml.etree.ElementTree
@@ -41,7 +42,7 @@ import xml.etree.ElementTree as et
 
 # You can ask Varys to get you more if you desire
 resnet_input = 32  #size of resnet18 input images
-back_patch = 64
+back_patch_size = 64
 
 # In[ ]:
 
@@ -127,7 +128,23 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
       return img, target
 
-    def get_int_over_union(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
+    def randomCrop(self,img,back_patch_size):
+      w, h = img.size
+      th = back_patch_size
+      tw = back_patch_size
+
+      if w == tw and h == th:
+          return img
+
+      x1 = random.randint(0, w - tw)
+      y1 = random.randint(0, h - th)
+      x2 = x1 + tw
+      y2 = y1 + th
+
+      return x1,y1,x2,y2,img.crop((x1, y1, x2, y2))
+
+
+    def get_int_over_union(self,xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
       x_len = min(xmax1,xmax2) - max(xmin1,xmin2)
       y_len = min(ymax1,ymax2) - max(ymin1,ymin2) 
 
@@ -140,7 +157,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
       return 1.0 * inter / union
 
-    def is_background(boxes, xmin, ymin, xmax, ymax):
+    def is_background(self,boxes, xmin, ymin, xmax, ymax):
 
       for box in boxes:
         xmin1 = box[0]
@@ -148,7 +165,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         xmax1 = box[2]
         ymax1 = box[3]
 
-        if get_int_over_union(xmin, ymin, xmax, ymax, xmin1, ymin1, xmax1, ymax1) > 0.5:
+        if self.get_int_over_union(xmin, ymin, xmax, ymax, xmin1, ymin1, xmax1, ymax1) > 0.5:
           return False
 
       return True
@@ -187,7 +204,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       test_images = []
       test_labels = []
 
-      background_crop = transforms.Compose([transforms.RandomCrop(back_patch)])
+      # background_crop = transforms.Compose([transforms.RandomCrop(back_patch_size)])
 
       index = 0
       train_back = bernoulli.rvs(0.05, size=5100)
@@ -228,17 +245,18 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
               
 
             train_images.append(image2)
-            train_labels.append(name)
+            train_labels.append(map_classes[name])
 
             if train_back[index] == 0:
               continue
 
-        back_image = background_crop(Image)
+        x1,y1,x2,y2,back_image = self.randomCrop(image,back_patch_size)
         if self.transform is not None:
-          back_image = self.transform(back_image)
+          if self.is_background(boxes,x1,y1,x2,y2):
+            back_image = self.transform(back_image)
 
-        train_images.append(back_image)
-        train_labels.append(back_class)
+            train_images.append(back_image)
+            train_labels.append(map_classes[back_class])
 
         index += 1
 
@@ -252,7 +270,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       print ("Processing Test Dataset")
       for img in os.listdir(os.path.join(self.root_dir, self.test_folder)):
         annotation_file = os.path.join(self.root_dir, self.annotation_test, img.strip('jpg') + 'xml')
-        object_map = parse_xml(annotation_file)
+        object_map = self.parse_xml(annotation_file)
 
         image = imread(os.path.join(self.root_dir, self.test_folder, img))
         height = image.shape[0]
@@ -286,17 +304,18 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
               image2 = self.transform(image2)              
 
             test_images.append(image2)
-            test_labels.append(name)
+            test_labels.append(map_classes[name])
 
         if test_back[index] == 0:
           continue
 
-        back_image = background_crop(Image)
+        x1,y1,x2,y2,back_image = self.randomCrop(image,back_patch_size)
         if self.transform is not None:
-          back_image = self.transform(back_image)
+          if self.is_background(boxes,x1,y1,x2,y2):
+            back_image = self.transform(back_image)
 
-        test_images.append(back_image)
-        test_labels.append(back_class)
+            test_images.append(back_image)
+            test_labels.append(map_classes[back_class])
 
         index += 1
 
