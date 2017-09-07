@@ -71,8 +71,8 @@ def arya_train(sl,optimizer,criterion):
 	for epoch in range(num_epochs):
 	    for i, (images, labels) in enumerate(train_loader):           
 	        
-	        images=Variable(images)
-	        labels=Variable(labels)
+	        images=Variable(images.cuda())
+	        labels=Variable(labels.cuda())
 
 	        # Forward + Backward + Optimize
 	        optimizer.zero_grad()  # zero the gradient buffer
@@ -99,7 +99,7 @@ def test(model):
     total = 0
     print ("Testing")
     for images, labels in test_loader:
-        images = Variable(images)            
+        images = Variable(images.cuda())            
         
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
@@ -107,19 +107,19 @@ def test(model):
         correct += (predicted.cpu() == labels.cpu()).sum()
     print('Accuracy of the network after training on notMNIST small dataset : %d %%' % (100 * correct / total))
     return (100 * correct / total)
+    
+
+with torch.cuda.device(1):
+	print ("Starting Training")
+	f = open(result_file, 'w')
+	for learning_rate in learning_rate_list:        
+		resnet18 = models.resnet18(pretrained=True)
+		resnet18.fc = nn.Linear(resnet18.fc.in_features, 21)  
+		resnet18.cuda()
+		optimizer_resnet = torch.optim.SGD(resnet18.parameters(), learning_rate, hyp_momentum) 
+		arya_train(learning_rate,optimizer_resnet,criterion)
+		acc = test(resnet18)
+		f.write("Accuracy of RESNET18 with learning rate = " + str(learning_rate) + " : " + str(acc) + "\n")      
 
 
-
-print ("Starting Training")
-f = open(result_file, 'w')
-for learning_rate in learning_rate_list:        
-	resnet18 = models.resnet18(pretrained=True)
-	resnet18.fc = nn.Linear(resnet18.fc.in_features, 21)  
-
-	optimizer_resnet = torch.optim.SGD(resnet18.parameters(), learning_rate, hyp_momentum) 
-	arya_train(learning_rate,optimizer_resnet,criterion)
-	acc = test(resnet18)
-	f.write("Accuracy of RESNET18 with learning rate = " + str(learning_rate) + " : " + str(acc) + "\n")      
-
-
-f.close()
+	f.close()
