@@ -27,7 +27,7 @@ back_patch_size = 64
 
 
 # Cersei chose violence, you choose your hyper-parameters wisely using validation data!
-batch_size = 2
+batch_size = 1
 num_epochs = 5
 learning_rate_list =  [0.1, 0.01, 0.001, 0.0001, 0.00001]
 hyp_momentum = 0.9
@@ -37,7 +37,11 @@ result_file = 'result_classification.txt'
 resnet18_loss_file = 'resnet18_loss'
 model_file_resnet = 'resnet18_model'
 
-composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+# composed_transform = transforms.Compose([transforms.Scale((resnet_input, resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+# composed_transform = transforms.Compose([transforms.Scale(resnet_input), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+
+
 train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
 test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 

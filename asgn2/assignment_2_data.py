@@ -41,7 +41,7 @@ import xml.etree.ElementTree as et
 
 
 # You can ask Varys to get you more if you desire
-resnet_input = 32  #size of resnet18 input images
+resnet_input = 224  #size of resnet18 input images
 back_patch_size = 64
 
 # In[ ]:
@@ -52,6 +52,7 @@ batch_size = 2
 num_epochs = 5
 learning_rate =  0.001
 hyp_momentum = 0.9
+data_size = 3000
 root_dir = 'Data'
 back_class = '__background__'
 
@@ -125,6 +126,17 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         img, target = self.train_data[idx], self.train_labels[idx]
       else:
         img, target = self.test_data[idx], self.test_labels[idx]
+
+      # print ("Before")
+      # print (type(img))
+      # print (img.size)
+      if self.transform is not None:
+        img = img.resize((224,224), Image.BILINEAR)
+        img = self.transform(img)
+
+      # print ("After")
+      # print (type(img))
+      # print (img.size())
 
       return img, target
 
@@ -240,30 +252,41 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
             image2 = image.crop((xmin, ymin, xmax, ymax))
 
-            if self.transform is not None:
-              image2 = self.transform(image2)
+            # if self.transform is not None:
+            #   image2 = self.transform(image2)
               
 
             train_images.append(image2)
             train_labels.append(map_classes[name])
 
-            if train_back[index] == 0:
-              continue
+        if train_back[index] == 0:
+          index += 1
+          continue
 
         x1,y1,x2,y2,back_image = self.randomCrop(image,back_patch_size)
-        if self.transform is not None:
-          if self.is_background(boxes,x1,y1,x2,y2):
-            back_image = self.transform(back_image)
+        # if self.transform is not None:
+        if self.is_background(boxes,x1,y1,x2,y2):
+          # back_image = self.transform(back_image)
 
-            train_images.append(back_image)
-            train_labels.append(map_classes[back_class])
+          train_images.append(back_image)
+          train_labels.append(map_classes[back_class])
 
         index += 1
+        if index == data_size:
+          break
 
       train_labels = np.array(train_labels)
       train_labels = torch.from_numpy(train_labels)
 
       training_set = (train_images,train_labels)
+
+      with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
+        torch.save(training_set, f)
+
+      del training_set
+      del train_images
+      del train_labels
+      del train_back
 
       index = 0
       test_back = bernoulli.rvs(0.05, size=5000)
@@ -300,36 +323,41 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
             image2 = image.crop((xmin, ymin, xmax, ymax))
 
-            if self.transform is not None:
-              image2 = self.transform(image2)              
+            # if self.transform is not None:
+            #   image2 = self.transform(image2)              
 
             test_images.append(image2)
             test_labels.append(map_classes[name])
 
         if test_back[index] == 0:
+          index += 1
           continue
 
         x1,y1,x2,y2,back_image = self.randomCrop(image,back_patch_size)
-        if self.transform is not None:
-          if self.is_background(boxes,x1,y1,x2,y2):
-            back_image = self.transform(back_image)
+        # if self.transform is not None:
+        if self.is_background(boxes,x1,y1,x2,y2):
+          # back_image = self.transform(back_image)
 
-            test_images.append(back_image)
-            test_labels.append(map_classes[back_class])
+          test_images.append(back_image)
+          test_labels.append(map_classes[back_class])        
 
         index += 1
+        if index == data_size:
+          break
 
 
       test_labels = np.array(test_labels)
       test_labels = torch.from_numpy(test_labels)
 
       test_set = (test_images,test_labels)
-
-      with open(os.path.join(self.root_dir, self.processed_folder, self.training_file), 'wb') as f:
-        torch.save(training_set, f)
+      
       with open(os.path.join(self.root_dir, self.processed_folder, self.test_file), 'wb') as f:
         torch.save(test_set, f)
 
+      del test_set
+      del test_images
+      del test_labels
+      del test_back
 
 
 # ## Train the netwok
@@ -338,35 +366,35 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 # In[ ]:
 
 
-composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
-# composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor()])
-train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+# composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+# # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor()])
+# train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+# test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
-print('Size of train dataset: %d' % len(train_dataset))
-print('Size of test dataset: %d' % len(test_dataset))
+# print('Size of train dataset: %d' % len(train_dataset))
+# print('Size of test dataset: %d' % len(test_dataset))
 
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+# train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+# test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
-print ("Checking the training / test set")
-def imshow(img):
-  npimg = img.numpy()    
-  plt.imshow(np.transpose(npimg, (1, 2, 0)))
-  plt.show()
+# print ("Checking the training / test set")
+# def imshow(img):
+#   npimg = img.numpy()    
+#   plt.imshow(np.transpose(npimg, (1, 2, 0)))
+#   plt.show()
 
-train_dataiter = iter(train_loader)
-train_images, train_labels = train_dataiter.next()
-print("Train images")
-imshow(torchvision.utils.make_grid(train_images))
+# train_dataiter = iter(train_loader)
+# train_images, train_labels = train_dataiter.next()
+# print("Train images")
+# imshow(torchvision.utils.make_grid(train_images))
 
 
-test_dataiter = iter(test_loader)
-test_images, test_labels = test_dataiter.next()
-print("Test images")
-imshow(torchvision.utils.make_grid(test_images))
+# test_dataiter = iter(test_loader)
+# test_images, test_labels = test_dataiter.next()
+# print("Test images")
+# imshow(torchvision.utils.make_grid(test_images))
 
-print(test_labels)
+# print(test_labels)
 
 # In[ ]:
 
