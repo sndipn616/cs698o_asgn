@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import torchvision.models as models
 import torchvision.transforms as transforms
 import xml.etree.ElementTree as et
+import cPickle as pkl
 
 # ### Fine-tuning
 # Litlefinger has brought you a pre-trained network. Fine-tune the network in the following section:
@@ -27,10 +28,11 @@ back_patch_size = 64
 
 
 # Cersei chose violence, you choose your hyper-parameters wisely using validation data!
-batch_size = 1
-num_epochs = 5
+batch_size = 5
+num_epochs = 2
 learning_rate_list =  [0.1, 0.01, 0.001, 0.0001, 0.00001]
 hyp_momentum = 0.9
+dataset_size = 5000
 root_dir = 'Data'
 back_class = '__background__'
 result_file = 'result_classification.txt'
@@ -45,8 +47,27 @@ composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), tran
 train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
 test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
+# print('Size of train dataset: %d' % len(train_dataset))
+# print('Size of test dataset: %d' % len(test_dataset))
+
+# train_dataset = train_dataset[0:dataset_size]
+# test_dataset = test_dataset[0:dataset_size]
+
+# print('Size of train dataset: %d' % len(train_dataset))
+# print('Size of test dataset: %d' % len(test_dataset))
+
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+
+
+print('Size of train dataset: %d' % len(train_loader))
+print('Size of test dataset: %d' % len(test_loader))
+
+# train_loader = train_loader[0:dataset_size]
+# test_loader = test_loader[0:dataset_size]
+
+# print('Size of train dataset: %d' % len(train_loader))
+# print('Size of test dataset: %d' % len(test_loader))
 
 # resnet18 = models.resnet18(pretrained=True)
 
@@ -109,7 +130,7 @@ def test(model):
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted.cpu() == labels.cpu()).sum()
-    print('Accuracy of the network after training on notMNIST small dataset : %d %%' % (100 * correct / total))
+    print('Accuracy of the network after training on test dataset : %d %%' % (100 * correct / total))
     return (100 * correct / total)
 
 

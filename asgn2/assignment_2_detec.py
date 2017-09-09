@@ -34,8 +34,8 @@ resnet_input = 224  #size of resnet18 input images
 back_patch_size = 64
 
 window_size = [32, 64, 96, 128]
-aspect_ratio = [1, 2, 4]
-stride = 2
+aspect_ratio = [1, 2, 4, 8]
+stride = 8
 
 # Cersei chose violence, you choose your hyper-parameters wisely using validation data!
 batch_size = 5
@@ -138,7 +138,7 @@ def theon_sliding_window(model):
 
 def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
     # 
-
+    return x1,y1,x2,y2
 
 # Daenerys, the queen, then orders her army to test out the trained model on the test dataset.
 
@@ -159,7 +159,7 @@ resnet18 = models.resnet18(pretrained=True)
 resnet18.fc = nn.Linear(resnet18.fc.in_features, 21)
 resnet18.load_state_dict(torch.load(model_file_resnet))
 theon_sliding_window(resnet18)
-daenerys_test(resnet18) 
+# daenerys_test(resnet18) 
 
 # # Final Showdown
 # After covering all the steps and passing the accuracy value to the talking crystal, they all pass through to the land of the living, with a wounded Jon Snow armed with the Dragon-axe. After a fierce battle, Jon Snow manages to go face to face with the Night king. Surrounded by battling men and falling bodies, they engage in a ferocious battle, a battle of spear and axe. After a raging fight, Jon manages to sink the axe into the Night king's heart, but not before he gets wounded by the spear. As dead men fall to bones, Daenerys and others rush to his aid, but it is too late. Everyone is in tears as they look towards the man of honour, Jon Snow, lying in Daenerys's arms when he says his last words: "The night has ended. Winter is finally over!"
