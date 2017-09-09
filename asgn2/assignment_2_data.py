@@ -141,7 +141,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       return img, target
 
     def randomCrop(self,img,back_patch_size):
-      w, h = img.size
+      h, w, c = img.shape
       th = back_patch_size
       tw = back_patch_size
 
@@ -153,7 +153,8 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       x2 = x1 + tw
       y2 = y1 + th
 
-      return x1,y1,x2,y2,img.crop((x1, y1, x2, y2))
+      # return x1,y1,x2,y2,img.crop((x1, y1, x2, y2))
+      return x1,y1,x2,y2,img[y1:y2,x1:x2,:]
 
 
     def get_int_over_union(self,xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
@@ -227,7 +228,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
         image = imread(os.path.join(self.root_dir, self.training_folder, img))
         # image = torch.from_numpy(image)
-        image = Image.fromarray(image, mode='RGB')
+        # image = Image.fromarray(image, mode='RGB')
 
         boxes = []
 
@@ -250,7 +251,9 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
             boxes.append(temp2)
 
-            image2 = image.crop((xmin, ymin, xmax, ymax))
+            # image2 = image.crop((xmin, ymin, xmax, ymax))
+            image2 = image[ymin : ymax, xmin : xmax, :]
+            image2 = Image.fromarray(image2, mode='RGB')
 
             # if self.transform is not None:
             #   image2 = self.transform(image2)
@@ -267,13 +270,13 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         # if self.transform is not None:
         if self.is_background(boxes,x1,y1,x2,y2):
           # back_image = self.transform(back_image)
-
+          back_image = Image.fromarray(back_image, mode='RGB')
           train_images.append(back_image)
           train_labels.append(map_classes[back_class])
 
-        index += 1
-        if index == data_size:
-          break
+        # index += 1
+        # if index == data_size:
+        #   break
 
       train_labels = np.array(train_labels)
       train_labels = torch.from_numpy(train_labels)
@@ -300,7 +303,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         width = image.shape[1]
 
         # image = torch.from_numpy(image)
-        image = Image.fromarray(image, mode='RGB')
+        # image = Image.fromarray(image, mode='RGB')
 
         for name in object_map:
           if name not in classes:
@@ -321,7 +324,8 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
             boxes.append(temp2)
 
-            image2 = image.crop((xmin, ymin, xmax, ymax))
+            image2 = image[ymin : ymax, xmin : xmax, :]
+            image2 = Image.fromarray(image2, mode='RGB')
 
             # if self.transform is not None:
             #   image2 = self.transform(image2)              
@@ -337,13 +341,13 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
         # if self.transform is not None:
         if self.is_background(boxes,x1,y1,x2,y2):
           # back_image = self.transform(back_image)
-
+          back_image = Image.fromarray(back_image, mode='RGB')
           test_images.append(back_image)
           test_labels.append(map_classes[back_class])        
 
-        index += 1
-        if index == data_size:
-          break
+        # index += 1
+        # if index == data_size:
+        #   break
 
 
       test_labels = np.array(test_labels)
@@ -365,6 +369,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 # In[ ]:
 
+# composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
 
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
 # # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor()])
