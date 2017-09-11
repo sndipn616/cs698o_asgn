@@ -220,7 +220,7 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
       # background_crop = transforms.Compose([transforms.RandomCrop(back_patch_size)])
 
       index = 0
-      train_back = bernoulli.rvs(0.05, size=5100)
+      train_back = bernoulli.rvs(0.005, size=5100)
       print ("Processing Train Dataset")
       for img in os.listdir(os.path.join(self.root_dir, self.training_folder)):
         annotation_file = os.path.join(self.root_dir, self.annotation_training, img.strip('jpg') + 'xml')
@@ -257,10 +257,15 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
             # if self.transform is not None:
             #   image2 = self.transform(image2)
-              
+            
+            if map_classes[name] == 15:  
+              if train_back[index] == 1:
+                train_images.append(image2)
+                train_labels.append(map_classes[name])
+            else:
+              train_images.append(image2)
+              train_labels.append(map_classes[name])
 
-            train_images.append(image2)
-            train_labels.append(map_classes[name])
 
         if train_back[index] == 0:
           index += 1

@@ -29,15 +29,17 @@ back_patch_size = 64
 
 # Cersei chose violence, you choose your hyper-parameters wisely using validation data!
 batch_size = 5
-num_epochs = 2
-learning_rate_list =  [0.1, 0.01, 0.001, 0.0001, 0.00001]
+num_epochs = 3
+# learning_rate_list =  [0.1, 0.01, 0.001, 0.0001, 0.00001]
+learning_rate_list =  [0.001]
+
 hyp_momentum = 0.9
 dataset_size = 5000
 root_dir = 'Data'
 back_class = '__background__'
-result_file = 'result_classification.txt'
-resnet18_loss_file = 'resnet18_loss'
-model_file_resnet = 'resnet18_model'
+result_file = '3_result_classification.txt'
+resnet18_loss_file = '3_resnet18_loss'
+model_file_resnet = '3_resnet18_model'
 
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input, resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
 # composed_transform = transforms.Compose([transforms.Scale(resnet_input), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
@@ -89,9 +91,9 @@ def save_loss(loss,filename):
 	with open(filename, "wb") as fp:
 		pkl.dump(loss,fp)
 
-def arya_train(sl,optimizer,criterion):
+def arya_train(sl,resnet18,optimizer,criterion,opt):
 	# Begin
-	print ("Training RESNET18")
+	print ("Training RESNET18 " + opt)
 	loss_resnet18 = []
 	for epoch in range(num_epochs):
 	    for i, (images, labels) in enumerate(train_loader):           
@@ -114,14 +116,17 @@ def arya_train(sl,optimizer,criterion):
 	    
 	            loss_resnet18.append(loss.data[0])
 
-	torch.save(resnet18.state_dict(), model_file_resnet + str(sl))
-	save_loss(loss_resnet18,resnet18_loss_file + str(sl) + ".txt")
+	torch.save(resnet18.state_dict(), model_file_resnet + str(sl) + str(opt))
+	save_loss(loss_resnet18,resnet18_loss_file + str(sl) + str(opt) + ".txt")
+	return resnet18
 
 def test(model):
     # Write loops for testing the model on the test set
     # You should also print out the accuracy of the model
     correct = 0
     total = 0
+    # count = {}
+    # count2 = {}
     print ("Testing")
     for images, labels in test_loader:
         images = Variable(images)            
@@ -130,6 +135,9 @@ def test(model):
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted.cpu() == labels.cpu()).sum()
+        # print ("correct : " + str(correct) + " predicted : " + str(predicted) + " labels : " + str(labels))
+        # print (labels)
+        # print (correct)
     print('Accuracy of the network after training on test dataset : %d %%' % (100 * correct / total))
     return (100 * correct / total)
 
@@ -139,12 +147,20 @@ print ("Starting Training")
 f = open(result_file, 'w')
 for learning_rate in learning_rate_list:        
 	resnet18 = models.resnet18(pretrained=True)
-	resnet18.fc = nn.Linear(resnet18.fc.in_features, 21)  
-
+	resnet18.fc = nn.Linear(resnet18.fc.in_features, 21) 
+	# fn = model_file_resnet + str(learning_rate)
+	# resnet18.load_state_dict(torch.load(fn))
 	optimizer_resnet = torch.optim.SGD(resnet18.parameters(), learning_rate, hyp_momentum) 
-	arya_train(learning_rate,optimizer_resnet,criterion)
+	resnet18 = arya_train(learning_rate,resnet18,optimizer_resnet,criterion,'sgd')
 	acc = test(resnet18)
-	f.write("Accuracy of RESNET18 with learning rate = " + str(learning_rate) + " : " + str(acc) + "\n")      
+
+	f.write("Accuracy of RESNET18 with sgd optim and learning rate = " + str(learning_rate) + " : " + str(acc) + "\n")
+	
+	# optimizer_resnet = torch.optim.Adam(resnet18.parameters(), lr = learning_rate)
+	# resnet18 = arya_train(learning_rate,resnet18,optimizer_resnet,criterion,'adam')
+	# acc = test(resnet18)
+
+	# f.write("Accuracy of RESNET18 with adam optim and  learning rate = " + str(learning_rate) + " : " + str(acc) + "\n")      
 
 
 f.close()
