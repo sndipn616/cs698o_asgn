@@ -3,6 +3,7 @@ import os
 import sys
 import numpy as np
 import torch
+import torchvision
 import torch.nn as nn
 import torch.utils.data
 import torchvision.transforms as transforms
@@ -17,12 +18,15 @@ import torchvision.transforms as transforms
 import xml.etree.ElementTree as et
 import cPickle as pkl
 
+np.random.seed(1)
+
+
 root_dir = 'Data'
-batch_size = 10
-model_file_resnet = '3_resnet18_model0.001sgd'
+batch_size = 1
+model_file_resnet = 'resnet_model_weighted'
 window_size = [64, 96, 128]
 aspect_ratio = [1, 2, 4]
-stride = 32
+stride = 48
 
 classes = ('__background__',
            'aeroplane', 'bicycle', 'bird', 'boat',
@@ -51,10 +55,10 @@ composed_transform = transforms.Compose([transforms.ToTensor()])
 
 
 # train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
-# test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
 # train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-# test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 
 # print('Size of train dataset: %d' % len(train_loader))
@@ -90,46 +94,31 @@ def test(model):
     count2 = {}
     print ("Testing")
     for images, labels in test_loader:
-		# img = images.numpy()
-		# img = img.reshape(224, 224, 3)
-		# print (img.shape)
-		# img = Image.fromarray(img)
-		# img.show()
-		# print (type(images))
-		# img = images.resize_(224,224, 3)
-		# img = Image.fromarray(img.numpy())
-		# img.show()
-		# print (images)
-		images = Variable(images, requires_grad=True)
+		# imshow(torchvision.utils.make_grid(images))
+		images = Variable(images, requires_grad=False)
 		outputs = model(images)
 		# print (outputs.size())
 		x,predicted = torch.max(outputs.data, 1)
 		total += labels.size(0)
-		# print ("x : " + str(x))
-		# print ("predicted : " + str(predicted.numpy()) )
-		# print ("total : " + str(total))
-		# print ("labels : " + str(labels[0]))
+		
 		predicted2 = predicted.numpy()
 		labels2 = labels.numpy()
+		# print (resnet18.bn1)
 		print ("Predicted : " + str(predicted2) + " Actual : " + str(labels2) + " Correct : " + str(predicted2 == labels2))
-		for i in predicted2:
-			if i not in count:
-				count[i] = 0
+		# for i in predicted2:
+		# 	if i not in count:
+		# 		count[i] = 0
 
-		for i in labels2:
-			if i not in count2:
-				count2[i] = 0	
+		# for i in labels2:
+		# 	if i not in count2:
+		# 		count2[i] = 0	
 
-		count[predicted[0]] += 1
-		count2[labels[0]] += 1
+		# count[predicted[0]] += 1
+		# count2[labels[0]] += 1
 
-		correct += (predicted.cpu() == labels.cpu()).sum()
-		# break
-		# print ("correct : " + str(correct))
+		correct += (predicted.cpu() == labels.cpu()).sum()		
 
-		# sys.exit()
-
-    print('Accuracy of the network on the 10000 test images: %d %%' % (100 * correct / total))
+    print('Accuracy of the network on the test images: %d %%' % (100 * correct / total))
     return (100 * correct / total), count, count2
 
 
@@ -137,11 +126,14 @@ def test2(model):
 	images = os.listdir('Data/VOCdevkit_Test/VOC2007/JPEGImages')
 
 	for image in images:
-		if '004115' not in image:
-			continue
+		# if '003191' not in image:
+		# 	continue
 		all_window_images = torch.zeros(1, 3, 224, 224)
 		# all_window_images = []
 		img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
+		img.show()
+
+		img2 = img.copy()
 		# img = imread('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
 		# img.show()
 		# print (img.size)
@@ -176,7 +168,9 @@ def test2(model):
 			# img_height, img_width, img_channel = img.shape
 			# sys.exit()
 			img_width, img_height = img.size
-			c = 0			
+			c = 0
+			bs = 0
+			draw = ImageDraw.Draw(img2)			
 			for wr in window_size:
 				for ar in aspect_ratio:
 					i = 0
@@ -207,16 +201,32 @@ def test2(model):
 								window_image = window_image.resize_(1, 3, 224, 224)
 								# window_image = img[ymin:ymax,xmin:xmax,:]
 								# all_window_images.append(window_image)
-								all_window_images =  torch.cat([all_window_images, window_image])
+								# all_window_images =  torch.cat([all_window_images, window_image])
+								# bs = (bs + 1) % batch_size
+								# if bs == 0:
+									# imshow(torchvision.utils.make_grid(all_window_images))
+								output = model(Variable(window_image))
+								val, predicted = torch.max(output.data, 1)
+								# print ("Predicted : " + str(predicted.numpy()))
+								# print (val.numpy())
+								# all_window_images = torch.zeros(1, 3, 224, 224)
 								# window_image.show()
 								# output = model(Variable(window_image))
 								# val, predicted = torch.max(output.data, 1)
 								# print (predicted[0])
 								# if predicted[0] in map_classes_inverse:
-								# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0]) +  " class : " + map_classes_inverse[predicted[0]])
+								# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " count : " + str(c))
+
+								if predicted[0] != 0:
+									prob = getProb(output)
+									if prob[0][predicted[0]] > 0.1:
+										# print (prob[0][predicted[0]])
+										draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
+										draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
+										print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]))
 								# else:
 								# 	print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0]) + " class : Unknown ")
-								print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " count : " + str(c))
+								# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " count : " + str(c))
 								xmin = xmin + stride
 								xmax = xmin + window_width
 
@@ -227,16 +237,33 @@ def test2(model):
 
 				        	# ymax = ymin + window_height
 
-			output = model(Variable(all_window_images))
-			val, predicted = torch.max(output.data, 1)
-			print (predicted)
+			
 			# all_window_images = torch.FloatTensor(all_window_images)
 			# all_window_images = np.asarray(all_window_images,dtype=np.float32)
 			# print (type(all_window_images))
 			# all_window_images = torch.from_numpy(all_window_images)
-			print ("here")
-			sys.exit()
-		
+			
+		img2.show()
+		print ("here")
+			# sys.exit()
+
+def sigmoid (x): 
+	return 1/(1 + np.exp(-x))
+
+def getProb(output):
+	p = output.data.numpy()
+	p = sigmoid(p)
+	p = p / np.sum(p)
+	# print (p.shape)
+	# print (np.amax(p))
+	return p
+	# return 1.0
+
+
+def imshow(img):
+  npimg = img.numpy()    
+  plt.imshow(np.transpose(npimg, (1, 2, 0)))
+  plt.show()
 
 
 def draw_boxes(boxes,image):
@@ -253,9 +280,11 @@ def draw_boxes(boxes,image):
 
 resnet18 = models.resnet18(pretrained=True)
 resnet18.fc = nn.Linear(resnet18.fc.in_features, 21)
-resnet18.load_state_dict(torch.load(model_file_resnet))  
+resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage))  
+resnet18 = resnet18.eval()
 test2(resnet18)
 # print (len(train_loader))
 # print (count)
 # print(count2)
 
+#14  1 14  7 17 20 16 20 16 15
