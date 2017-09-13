@@ -25,7 +25,7 @@ import torch.nn as nn
 import torch.utils.data
 from scipy.stats import bernoulli
 import torchvision.transforms as transforms
-from PIL import Image, ImageOps
+from PIL import Image, ImageFont, ImageDraw, ImageEnhance, ImageOps
 from torch.autograd import Variable
 from scipy.ndimage import imread
 import xml.etree.ElementTree
@@ -59,6 +59,10 @@ root_dir = 'Data'
 back_class = '__background__'
 model_file_resnet = 'resnet_model_weighted'
 
+window_size = [32, 64, 128]
+aspect_ratio = [1, 2]
+stride = 16
+
 # ## Build the data
 # The hound who was in charge for getting the data, brought you the following links:
 # <br/>Training and validation:
@@ -88,10 +92,19 @@ map_classes = {'__background__' : 0,
            'bottle' : 5, 'bus' : 6, 'car' : 7, 'cat' : 8, 'chair' : 9,
            'cow' : 10, 'diningtable' : 11, 'dog' : 12, 'horse' : 13,
            'motorbike' : 14, 'person' : 15, 'pottedplant' : 16,
-           'sheep' : 17, 'sofa' : 18, 'train' : 19, 'tvmonitor' : 20}
+           'sheep' : 17, 'sofa' : 18, 'train' : 19, 'tvmonitor' : 20}\
+
+map_classes_inverse = {0 : '__background__',
+             1 : 'aeroplane', 2 : 'bicycle', 3 : 'bird', 4 : 'boat',
+             5 : 'bottle', 6 : 'bus', 7 : 'car', 8 : 'cat', 9 : 'chair',
+             10 : 'cow', 11 : 'diningtable', 12 : 'dog', 13 : 'horse',
+             14 : 'motorbike', 15 : 'person', 16 : 'pottedplant',
+             17 : 'sheep', 18 : 'sofa', 19 : 'train', 20 : 'tvmonitor'}
 
 
 # In[ ]:
+
+
 
 
 class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
@@ -399,18 +412,20 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 # In[ ]:
 
-composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+# composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+new_transform = transforms.Compose([transforms.ToTensor()])
+
 
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor()])
-train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
+# train_dataset = hound_dataset(root_dir=root_dir, train=True, transform=composed_transform) # Supply proper root_dir
+# test_dataset = hound_dataset(root_dir=root_dir, train=False, transform=composed_transform) # Supply proper root_dir
 
-print('Size of train dataset: %d' % len(train_dataset))
-print('Size of test dataset: %d' % len(test_dataset))
+# print('Size of train dataset: %d' % len(train_dataset))
+# print('Size of test dataset: %d' % len(test_dataset))
 
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+# train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+# test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
 
 
 
@@ -529,7 +544,7 @@ print ("Batch Size : " + str(batch_size))
 # resnet18 = resnet18.eval()
 # acc = test(resnet18)
 
-def theon_sliding_window():
+def theon_sliding_window(model):
   images = os.listdir('Data/VOCdevkit_Test/VOC2007/JPEGImages')
 
   for image in images:
@@ -537,18 +552,22 @@ def theon_sliding_window():
     #   continue
     # all_window_images = torch.zeros(1, 3, 224, 224)
     # all_window_images = []
+    bd_boxes_dict = {}
+    # bd_boxes = []
     img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
+
     img = img.resize((256,256), Image.BILINEAR)
     img.show()
+    img2 = img.copy()
 
-    img2 = img.copy()    
+    # img2 = img.copy()    
              
     print ("Sliding Window")
  
     img_width, img_height = img.size
     c = 0
     bs = 0
-    draw = ImageDraw.Draw(img2)     
+      
     for wr in window_size:
       for ar in aspect_ratio:
         i = 0
@@ -576,19 +595,31 @@ def theon_sliding_window():
 
               window_image = img.crop((xmin,ymin,xmax,ymax))
               window_image = window_image.resize((224,224), Image.BILINEAR)
-              window_image = composed_transform(window_image)
+              window_image = new_transform(window_image)
              
               window_image = window_image.resize_(1, 3, 224, 224)
             
               output = model(Variable(window_image))
+              val, predicted = torch.max(output.data, 1)
+              # val = val.numpy()
 
-
+              scores = output.data.numpy()
               if predicted[0] != 0:
                 prob = getProb(output)
                 if prob[0][predicted[0]] > 0.1:
+                  if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
+                    bd_boxes_dict[map_classes_inverse[predicted[0]]] = {}
+
+                  temp = []
+                  temp.append(xmin)
+                  temp.append(ymin)
+                  temp.append(xmax)
+                  temp.append(ymax)
+                  # print (scores.shape)
+                  bd_boxes_dict[map_classes_inverse[predicted[0]]][scores[0][predicted[0]]] = temp
              
-                  draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
-                  draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
+                  # draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
+                  # draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
                   print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]))
               
               if flag_x == True:
@@ -611,15 +642,101 @@ def theon_sliding_window():
               flag_y = True
  
       
-    img2.show()    
+    # img2.show()
+    aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,0.5)    
 
 
-def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
-  return 0
+def aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,threshold = 0.3):
+  # img2 = img.copy()
+  print ("Non-Maximum Suppression")
+  draw = ImageDraw.Draw(img2)   
+
+  fresh_bd_box_dict = {}
+  i = 0
+  for category in bd_boxes_dict:
+    current_dict = bd_boxes_dict[category]
+    fresh_bd_box_dict[category] = []
+    c = 0
+    i += 1
+    if len(current_dict.keys()) < 5:
+      continue
+
+    print (i)
+    print ("category : " + str(category))
+    print (current_dict)
+    for score in reversed(sorted(current_dict.keys())):
+      xmin2 = current_dict[score][0]
+      ymin2 = current_dict[score][1]
+      xmax2 = current_dict[score][2]
+      ymax2 = current_dict[score][3]
+      draw.rectangle(((xmin2, ymin2), (xmax2, ymax2)), outline='red')
+      draw.text((xmin2, ymin2), category)
+      break
+
+
+  img2.show()
+
+  #     if c == 0:
+  #       fresh_bd_box_dict[category].append(current_dict[score])
+
+  #     else:
+  #       for box in fresh_bd_box_dict[category]:
+  #         xmin1 = box[0]
+  #         ymin1 = box[1]
+  #         xmax1 = box[2]
+  #         ymax1 = box[3]
+
+  #         if iou(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2) < threshold:
+  #           temp = []
+  #           temp.append(xmin2)
+  #           temp.append(ymin2)
+  #           temp.append(xmax2)
+  #           temp.append(ymax2)
+  #           fresh_bd_box_dict[category].append(temp)
+
+
+  #     c += 1
+  #     print ("c : " + str(c))
+
+  # print ("Here")
+  # for category in fresh_bd_box_dict:
+  #   for box in fresh_bd_box_dict[category]:
+  #     xmin = box[0]
+  #     ymin = box[1]
+  #     xmax = box[2]
+  #     ymax = box[3]
+
+  #     draw.rectangle(((xmin, ymin), (xmax, ymax)), outline='red')
+  #     draw.text((xmin, ymin), category)
+
+
 
 def daenerys_test(resnet18):
   return 0
 
-resnet18.load_state_dict(torch.load(model_file_resnet))  
+def sigmoid (x): 
+  return 1/(1 + np.exp(-x))
+
+def getProb(output):
+  p = output.data.numpy()
+  p = sigmoid(p)
+  p = p / np.sum(p)
+
+  return p
+
+def iou(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
+      x_len = min(xmax1,xmax2) - max(xmin1,xmin2)
+      y_len = min(ymax1,ymax2) - max(ymin1,ymin2) 
+
+      inter = 0
+
+      if x_len > 0 and y_len > 0:
+        inter = x_len * y_len
+
+      union = (xmax1 - xmin1) * (ymax1 - ymin1) + (xmax2 - xmin2) * (ymax2 - ymin2) - inter
+
+      return 1.0 * inter / union
+
+resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
-theon_sliding_window()
+theon_sliding_window(resnet18)
