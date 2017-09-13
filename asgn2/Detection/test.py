@@ -24,9 +24,9 @@ np.random.seed(1)
 root_dir = 'Data'
 batch_size = 1
 model_file_resnet = 'resnet_model_weighted'
-window_size = [64, 96, 128]
-aspect_ratio = [1, 2, 4]
-stride = 48
+window_size = [32, 64, 96]
+aspect_ratio = [1, 2, 3]
+stride = 16
 
 classes = ('__background__',
            'aeroplane', 'bicycle', 'bird', 'boat',
@@ -128,18 +128,19 @@ def test2(model):
 	for image in images:
 		# if '003191' not in image:
 		# 	continue
-		all_window_images = torch.zeros(1, 3, 224, 224)
+		# all_window_images = torch.zeros(1, 3, 224, 224)
 		# all_window_images = []
 		img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
+		img = img.resize((256,256), Image.BILINEAR)
 		img.show()
 
 		img2 = img.copy()
 		# img = imread('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
 		# img.show()
 		# print (img.size)
-		object_map = parse_xml('Data/VOCdevkit_Test/VOC2007/Annotations/' + image.strip('.jpg') + '.xml')
-		# print (object_map)
-		for name in object_map:
+		# object_map = parse_xml('Data/VOCdevkit_Test/VOC2007/Annotations/' + image.strip('.jpg') + '.xml')
+		# # print (object_map)
+		# for name in object_map:
 			# if name not in classes:
 			# 	continue
 
@@ -163,76 +164,93 @@ def test2(model):
 			# 	# print ("val : " + str(val))
 			# 	print ("pred : " + str(map_classes_inverse[pred[0]]))        			
 	           
-			print ("Sliding Window")
-			# print (img.shape)
-			# img_height, img_width, img_channel = img.shape
-			# sys.exit()
-			img_width, img_height = img.size
-			c = 0
-			bs = 0
-			draw = ImageDraw.Draw(img2)			
-			for wr in window_size:
-				for ar in aspect_ratio:
-					i = 0
-					
-					while i < 2:
-						if i == 0:
-							window_width = wr
-							window_height = wr*ar
+		print ("Sliding Window")
+		# print (img.shape)
+		# img_height, img_width, img_channel = img.shape
+		# sys.exit()
+		img_width, img_height = img.size
+		c = 0
+		bs = 0
+		draw = ImageDraw.Draw(img2)			
+		for wr in window_size:
+			for ar in aspect_ratio:
+				i = 0
+				
+				while i < 2:
+					if i == 0:
+						window_width = wr
+						window_height = wr*ar
 
-						else:
-							window_height = wr
-							window_width = wr*ar
+					else:
+						window_height = wr
+						window_width = wr*ar
 
-						i += 1
-						ymin = 0
-						ymax = ymin + window_height
-					 	while ymax < img_height:
-							xmin = 0
+					i += 1
+					ymin = 0
+					ymax = ymin + window_height
+					flag_y = False
+				 	while ymax < img_height:
+						xmin = 0
+						xmax = xmin + window_width
+						flag_x = False
+
+						while xmax < img_width:
+							c += 1
+
+							window_image = img.crop((xmin,ymin,xmax,ymax))
+							window_image = window_image.resize((224,224), Image.BILINEAR)
+							window_image = composed_transform(window_image)
+							# print (window_image.size())
+							window_image = window_image.resize_(1, 3, 224, 224)
+							# window_image = img[ymin:ymax,xmin:xmax,:]
+							# all_window_images.append(window_image)
+							# all_window_images =  torch.cat([all_window_images, window_image])
+							# bs = (bs + 1) % batch_size
+							# if bs == 0:
+								# imshow(torchvision.utils.make_grid(all_window_images))
+							output = model(Variable(window_image))
+							val, predicted = torch.max(output.data, 1)
+							# print ("Predicted : " + str(predicted.numpy()))
+							# print (val.numpy())
+							# all_window_images = torch.zeros(1, 3, 224, 224)
+							# window_image.show()
+							# output = model(Variable(window_image))
+							# val, predicted = torch.max(output.data, 1)
+							# print (predicted[0])
+							# if predicted[0] in map_classes_inverse:
+							# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " count : " + str(c))
+
+							if predicted[0] != 0:
+								prob = getProb(output)
+								if prob[0][predicted[0]] > 0.1:
+									# print (prob[0][predicted[0]])
+									draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
+									draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
+									print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]))
+							# else:
+							# 	print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0]) + " class : Unknown ")
+							# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " count : " + str(c))
+							if flag_x == True:
+								break
+
+							xmin = xmin + stride
 							xmax = xmin + window_width
-							
+							if xmax >= img_width:
+								xmax = img_width - 1
+								flag_x = True
 
-							while xmax < img_width:
-								c += 1
-								window_image = img.crop((xmin,ymin,xmax,ymax))
-								window_image = window_image.resize((224,224), Image.BILINEAR)
-								window_image = composed_transform(window_image)
-								# print (window_image.size())
-								window_image = window_image.resize_(1, 3, 224, 224)
-								# window_image = img[ymin:ymax,xmin:xmax,:]
-								# all_window_images.append(window_image)
-								# all_window_images =  torch.cat([all_window_images, window_image])
-								# bs = (bs + 1) % batch_size
-								# if bs == 0:
-									# imshow(torchvision.utils.make_grid(all_window_images))
-								output = model(Variable(window_image))
-								val, predicted = torch.max(output.data, 1)
-								# print ("Predicted : " + str(predicted.numpy()))
-								# print (val.numpy())
-								# all_window_images = torch.zeros(1, 3, 224, 224)
-								# window_image.show()
-								# output = model(Variable(window_image))
-								# val, predicted = torch.max(output.data, 1)
-								# print (predicted[0])
-								# if predicted[0] in map_classes_inverse:
-								# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " count : " + str(c))
 
-								if predicted[0] != 0:
-									prob = getProb(output)
-									if prob[0][predicted[0]] > 0.1:
-										# print (prob[0][predicted[0]])
-										draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
-										draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
-										print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]))
-								# else:
-								# 	print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0]) + " class : Unknown ")
-								# print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " count : " + str(c))
-								xmin = xmin + stride
-								xmax = xmin + window_width
+						# print ("Vertical")
 
-							# print ("Vertical")
-							ymin = ymin + stride
-							ymax = ymin + window_height
+						if flag_y == True:
+							break
+
+						ymin = ymin + stride
+						ymax = ymin + window_height
+
+						if ymax >= img_height:
+							ymax = img_height - 1
+							flag_y = True
 				# sys.exit()
 
 				        	# ymax = ymin + window_height
