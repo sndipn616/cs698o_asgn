@@ -544,7 +544,7 @@ print ("Batch Size : " + str(batch_size))
 def theon_sliding_window(model):
   window_size = [64, 96, 128]
   aspect_ratio = [1, 2]
-  stride = 10
+  stride = 20
 
 
 
@@ -557,12 +557,12 @@ def theon_sliding_window(model):
     #   continue
     # all_window_images = torch.zeros(1, 3, 224, 224)
     # all_window_images = []
-    bd_boxes_dict = {}
+    bd_boxes_dict = []
     # bd_boxes = []
     img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
 
     # img = img.resize((256,256), Image.BILINEAR)
-    # img.show()
+    img.show()
     img2 = img.copy()
 
     # img2 = img.copy()    
@@ -605,7 +605,7 @@ def theon_sliding_window(model):
               window_image = new_transform(window_image)
              
               window_image = window_image.resize_(1, 3, 224, 224)
-            
+              # print ("Here")
               output = model(Variable(window_image))
               val, predicted = torch.max(output.data, 1)
               # val = val.numpy()
@@ -613,9 +613,9 @@ def theon_sliding_window(model):
               scores = output.data.numpy()
               if predicted[0] != 0:
                 prob = getProb(output)
-                if prob[0][predicted[0]] > 0.11:
-                  if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
-                    bd_boxes_dict[map_classes_inverse[predicted[0]]] = []
+                if prob[0][predicted[0]] > 0.07:
+                  # if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
+                  #   bd_boxes_dict[map_classes_inverse[predicted[0]]] = []
 
                   temp = []
                   temp.append(xmin)
@@ -623,7 +623,7 @@ def theon_sliding_window(model):
                   temp.append(xmax)
                   temp.append(ymax)
                   # print (scores.shape)
-                  bd_boxes_dict[map_classes_inverse[predicted[0]]].append(temp)
+                  bd_boxes_dict.append(temp)
              
                   # draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
                   # draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
@@ -648,30 +648,59 @@ def theon_sliding_window(model):
               ymax = img_height - 1
               flag_y = True
  
-      
+    
+    f = open('Result/' + image.strip('jpg') + 'txt','w')
+    draw = ImageDraw.Draw(img2)
+    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict,0.5)
+    del bd_boxes_dict
+    for new_box in new_boxes:
+      x1 = new_box[0]
+      y1 = new_box[1]
+      x2 = new_box[2]
+      y2 = new_box[3]
+
+      img3 = img2.crop((x1,y1,x2,y2))
+      img3 = img3.resize((224,224), Image.BILINEAR)
+      img3 = new_transform(img3)
+      img3 = img3.resize_((1, 3, 224, 224))
+      output = model(Variable(img3))
+      val, predicted = torch.max(output.data, 1)
+
+      if predicted[0] != 0:
+        category = map_classes_inverse[predicted[0]]
+        prob = getProb(output)
+        if prob[0][predicted[0]] > 0.09:
+          f.write(category + "\t")
+          f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + "\n")
+          draw.rectangle(((x1, y1), (x2, y2)), outline='green')
+          draw.text((x1, y1), category)
+
+    img2.show()
+    img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
+    f.close()
     # img2.show()
     # aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,0.5)
-    draw = ImageDraw.Draw(img2)
-    f = open('Result/' + image.strip('jpg') + 'txt','w')
-    for category in bd_boxes_dict:
-      print ("category : " + str(category))
-      f.write(category + "\t")
-      new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict[category], 0.3)
-      print ("After Shape : " + str(new_boxes.shape))
-      for new_box in new_boxes:
-        x1 = new_box[0]
-        y1 = new_box[1]
-        x2 = new_box[2]
-        y2 = new_box[3]
-        f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + ":")
-        draw.rectangle(((x1, y1), (x2, y2)),outline='green')
-        draw.text((x1, y1), category)
+    # draw = ImageDraw.Draw(img2)
+    # f = open('Result/' + image.strip('jpg') + 'txt','w')
+    # for category in bd_boxes_dict:
+    #   print ("category : " + str(category))
+    #   f.write(category + "\t")
+    #   new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict[category], 0.3)
+    #   print ("After Shape : " + str(new_boxes.shape))
+    #   for new_box in new_boxes:
+    #     x1 = new_box[0]
+    #     y1 = new_box[1]
+    #     x2 = new_box[2]
+    #     y2 = new_box[3]
+    #     f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + ":")
+    #     draw.rectangle(((x1, y1), (x2, y2)),outline='green')
+    #     draw.text((x1, y1), category)
 
-      f.write('\n')
+    #   f.write('\n')
 
-    img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
-    # img2.show()
-    f.close()
+    # img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
+    # # img2.show()
+    # f.close()
 
 
 def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
