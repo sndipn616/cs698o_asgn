@@ -608,7 +608,7 @@ def theon_sliding_window(model):
                 prob = getProb(output)
                 if prob[0][predicted[0]] > 0.1:
                   if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
-                    bd_boxes_dict[map_classes_inverse[predicted[0]]] = {}
+                    bd_boxes_dict[map_classes_inverse[predicted[0]]] = []
 
                   temp = []
                   temp.append(xmin)
@@ -616,7 +616,7 @@ def theon_sliding_window(model):
                   temp.append(xmax)
                   temp.append(ymax)
                   # print (scores.shape)
-                  bd_boxes_dict[map_classes_inverse[predicted[0]]][scores[0][predicted[0]]] = temp
+                  bd_boxes_dict[map_classes_inverse[predicted[0]]].append(temp)
              
                   # draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
                   # draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
@@ -643,38 +643,107 @@ def theon_sliding_window(model):
  
       
     # img2.show()
-    aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,0.5)    
+    # aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,0.5)
+
+    for category in bd_boxes_dict:
+      new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict[category], 0.5)
+      for new_box in new_boxes:
+        draw = ImageDraw.Draw(img2)
+        x1 = new_box[0]
+        y1 = new_box[1]
+        x2 = new_box[2]
+        y2 = new_box[3]
+
+        draw.rectangle(((x1, y1), (x2, y2)),outline='red')
+        draw.text((x1, y1), category)
 
 
-def aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,threshold = 0.3):
-  # img2 = img.copy()
+def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
+  # if there are no boxes, return an empty list
   print ("Non-Maximum Suppression")
-  draw = ImageDraw.Draw(img2)   
 
-  fresh_bd_box_dict = {}
-  i = 0
-  for category in bd_boxes_dict:
-    current_dict = bd_boxes_dict[category]
-    fresh_bd_box_dict[category] = []
-    c = 0
-    i += 1
-    if len(current_dict.keys()) < 5:
-      continue
+  if len(boxes) == 0:
+    return []
+ 
+  # if the bounding boxes integers, convert them to floats --
+  # this is important since we'll be doing a bunch of divisions
+  if boxes.dtype.kind == "i":
+    boxes = boxes.astype("float")
+ 
+  # initialize the list of picked indexes 
+  pick = []
+ 
+  # grab the coordinates of the bounding boxes
+  x1 = boxes[:,0]
+  y1 = boxes[:,1]
+  x2 = boxes[:,2]
+  y2 = boxes[:,3]
+ 
+  # compute the area of the bounding boxes and sort the bounding
+  # boxes by the bottom-right y-coordinate of the bounding box
+  area = (x2 - x1 + 1) * (y2 - y1 + 1)
+  idxs = np.argsort(y2)
+ 
+  # keep looping while some indexes still remain in the indexes
+  # list
+  while len(idxs) > 0:
+    # grab the last index in the indexes list and add the
+    # index value to the list of picked indexes
+    last = len(idxs) - 1
+    i = idxs[last]
+    pick.append(i)
+ 
+    # find the largest (x, y) coordinates for the start of
+    # the bounding box and the smallest (x, y) coordinates
+    # for the end of the bounding box
+    xx1 = np.maximum(x1[i], x1[idxs[:last]])
+    yy1 = np.maximum(y1[i], y1[idxs[:last]])
+    xx2 = np.minimum(x2[i], x2[idxs[:last]])
+    yy2 = np.minimum(y2[i], y2[idxs[:last]])
+ 
+    # compute the width and height of the bounding box
+    w = np.maximum(0, xx2 - xx1 + 1)
+    h = np.maximum(0, yy2 - yy1 + 1)
+ 
+    # compute the ratio of overlap
+    overlap = (w * h) / area[idxs[:last]]
+ 
+    # delete all indexes from the index list that have
+    idxs = np.delete(idxs, np.concatenate(([last],
+      np.where(overlap > threshold)[0])))
+ 
+  # return only the bounding boxes that were picked using the
+  # integer data type
+  return boxes[pick].astype("int")
 
-    print (i)
-    print ("category : " + str(category))
-    print (current_dict)
-    for score in reversed(sorted(current_dict.keys())):
-      xmin2 = current_dict[score][0]
-      ymin2 = current_dict[score][1]
-      xmax2 = current_dict[score][2]
-      ymax2 = current_dict[score][3]
-      draw.rectangle(((xmin2, ymin2), (xmax2, ymax2)), outline='red')
-      draw.text((xmin2, ymin2), category)
-      break
+  # # img2 = img.copy()
+  # print ("Non-Maximum Suppression")
+  # draw = ImageDraw.Draw(img2)   
+
+  # fresh_bd_box_dict = {}
+  # i = 0
+  # for category in bd_boxes_dict:
+  #   current_dict = bd_boxes_dict[category]
+  #   fresh_bd_box_dict[category] = []
+  #   c = 0
+  #   i += 1
+  #   if len(current_dict.keys()) < 5:
+  #     continue
+
+  #   print (i)
+  #   print ("category : " + str(category))
+  #   print (current_dict)
+  #   for score in reversed(sorted(current_dict.keys())):
+  #     xmin2 = current_dict[score][0]
+  #     ymin2 = current_dict[score][1]
+  #     xmax2 = current_dict[score][2]
+  #     ymax2 = current_dict[score][3]
+  #     draw.rectangle(((xmin2, ymin2), (xmax2, ymax2)), outline='red')
+  #     draw.text((xmin2, ymin2), category)
+  #     break
 
 
-  img2.show()
+  # img2.show()
 
   #     if c == 0:
   #       fresh_bd_box_dict[category].append(current_dict[score])
