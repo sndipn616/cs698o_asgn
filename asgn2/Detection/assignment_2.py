@@ -59,9 +59,6 @@ root_dir = 'Data'
 back_class = '__background__'
 model_file_resnet = 'resnet_model_weighted'
 
-window_size = [32, 64, 128]
-aspect_ratio = [1, 2]
-stride = 16
 
 # ## Build the data
 # The hound who was in charge for getting the data, brought you the following links:
@@ -545,10 +542,18 @@ print ("Batch Size : " + str(batch_size))
 # acc = test(resnet18)
 
 def theon_sliding_window(model):
+  window_size = [64, 96, 128]
+  aspect_ratio = [1, 2]
+  stride = 10
+
+
+
   images = os.listdir('Data/VOCdevkit_Test/VOC2007/JPEGImages')
 
   for image in images:
-    # if '003191' not in image:
+    print ("name : " + str(image))
+    # continue
+    # if '001169' not in image:
     #   continue
     # all_window_images = torch.zeros(1, 3, 224, 224)
     # all_window_images = []
@@ -556,8 +561,8 @@ def theon_sliding_window(model):
     # bd_boxes = []
     img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
 
-    img = img.resize((256,256), Image.BILINEAR)
-    img.show()
+    # img = img.resize((256,256), Image.BILINEAR)
+    # img.show()
     img2 = img.copy()
 
     # img2 = img.copy()    
@@ -573,15 +578,17 @@ def theon_sliding_window(model):
         i = 0
         
         while i < 2:
-          if i == 0:
+          if ar == 1:
             window_width = wr
             window_height = wr*ar
+            i += 2
 
           else:
             window_height = wr
             window_width = wr*ar
+            i += 1
 
-          i += 1
+          
           ymin = 0
           ymax = ymin + window_height
           flag_y = False
@@ -606,7 +613,7 @@ def theon_sliding_window(model):
               scores = output.data.numpy()
               if predicted[0] != 0:
                 prob = getProb(output)
-                if prob[0][predicted[0]] > 0.1:
+                if prob[0][predicted[0]] > 0.11:
                   if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
                     bd_boxes_dict[map_classes_inverse[predicted[0]]] = []
 
@@ -620,7 +627,7 @@ def theon_sliding_window(model):
              
                   # draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
                   # draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
-                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]))
+                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
               
               if flag_x == True:
                 break
@@ -644,35 +651,39 @@ def theon_sliding_window(model):
       
     # img2.show()
     # aegon_targaryen_non_maximum_supression(img2,bd_boxes_dict,0.5)
-
+    draw = ImageDraw.Draw(img2)
+    f = open('Result/' + image.strip('jpg') + 'txt','w')
     for category in bd_boxes_dict:
-      new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict[category], 0.5)
+      print ("category : " + str(category))
+      f.write(category + "\t")
+      new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict[category], 0.3)
+      print ("After Shape : " + str(new_boxes.shape))
       for new_box in new_boxes:
-        draw = ImageDraw.Draw(img2)
         x1 = new_box[0]
         y1 = new_box[1]
         x2 = new_box[2]
         y2 = new_box[3]
-
-        draw.rectangle(((x1, y1), (x2, y2)),outline='red')
+        f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + ":")
+        draw.rectangle(((x1, y1), (x2, y2)),outline='green')
         draw.text((x1, y1), category)
+
+      f.write('\n')
+
+    img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
+    # img2.show()
+    f.close()
 
 
 def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
   # if there are no boxes, return an empty list
   print ("Non-Maximum Suppression")
-
+  boxes = np.asarray(boxes)
   if len(boxes) == 0:
     return []
  
-  # if the bounding boxes integers, convert them to floats --
-  # this is important since we'll be doing a bunch of divisions
-  if boxes.dtype.kind == "i":
-    boxes = boxes.astype("float")
- 
-  # initialize the list of picked indexes 
+  # initialize the list of picked indexes
   pick = []
- 
+  print ("Before Shape : " + str(boxes.shape))
   # grab the coordinates of the bounding boxes
   x1 = boxes[:,0]
   y1 = boxes[:,1]
@@ -683,38 +694,104 @@ def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
   # boxes by the bottom-right y-coordinate of the bounding box
   area = (x2 - x1 + 1) * (y2 - y1 + 1)
   idxs = np.argsort(y2)
- 
   # keep looping while some indexes still remain in the indexes
   # list
   while len(idxs) > 0:
-    # grab the last index in the indexes list and add the
-    # index value to the list of picked indexes
+    # grab the last index in the indexes list, add the index
+    # value to the list of picked indexes, then initialize
+    # the suppression list (i.e. indexes that will be deleted)
+    # using the last index
     last = len(idxs) - 1
     i = idxs[last]
     pick.append(i)
+    suppress = [last]
+
+  # loop over all indexes in the indexes list
+    for pos in xrange(0, last):
+      # grab the current index
+      j = idxs[pos]
+
+      # find the largest (x, y) coordinates for the start of
+      # the bounding box and the smallest (x, y) coordinates
+      # for the end of the bounding box
+      xx1 = max(x1[i], x1[j])
+      yy1 = max(y1[i], y1[j])
+      xx2 = min(x2[i], x2[j])
+      yy2 = min(y2[i], y2[j])
+
+      # compute the width and height of the bounding box
+      w = max(0, xx2 - xx1 + 1)
+      h = max(0, yy2 - yy1 + 1)
+
+      # compute the ratio of overlap between the computed
+      # bounding box and the bounding box in the area list
+      overlap = float(w * h) / area[j]
+
+      # if there is sufficient overlap, suppress the
+      # current bounding box
+      if overlap > threshold:
+        suppress.append(pos)
+
+    # delete all indexes from the index list that are in the
+    # suppression list
+    idxs = np.delete(idxs, suppress)
  
-    # find the largest (x, y) coordinates for the start of
-    # the bounding box and the smallest (x, y) coordinates
-    # for the end of the bounding box
-    xx1 = np.maximum(x1[i], x1[idxs[:last]])
-    yy1 = np.maximum(y1[i], y1[idxs[:last]])
-    xx2 = np.minimum(x2[i], x2[idxs[:last]])
-    yy2 = np.minimum(y2[i], y2[idxs[:last]])
+  # return only the bounding boxes that were picked
+  return boxes[pick]  
+  # if len(boxes) == 0:
+  #   return []
  
-    # compute the width and height of the bounding box
-    w = np.maximum(0, xx2 - xx1 + 1)
-    h = np.maximum(0, yy2 - yy1 + 1)
+  # # if the bounding boxes integers, convert them to floats --
+  # # this is important since we'll be doing a bunch of divisions
+  # if boxes.dtype.kind == "i":
+  #   boxes = boxes.astype("float")
  
-    # compute the ratio of overlap
-    overlap = (w * h) / area[idxs[:last]]
+  # # initialize the list of picked indexes 
+  # pick = []
+  # print ("Before Shape : " + str(boxes.shape))
+  # # grab the coordinates of the bounding boxes
+  # x1 = boxes[:,0]
+  # y1 = boxes[:,1]
+  # x2 = boxes[:,2]
+  # y2 = boxes[:,3]
+  
+  # # print (x1)
+  # # compute the area of the bounding boxes and sort the bounding
+  # # boxes by the bottom-right y-coordinate of the bounding box
+  # area = (x2 - x1 + 1) * (y2 - y1 + 1)
+  # idxs = np.argsort(y2)
  
-    # delete all indexes from the index list that have
-    idxs = np.delete(idxs, np.concatenate(([last],
-      np.where(overlap > threshold)[0])))
+  # # keep looping while some indexes still remain in the indexes
+  # # list
+  # while len(idxs) > 0:
+  #   # grab the last index in the indexes list and add the
+  #   # index value to the list of picked indexes
+  #   last = len(idxs) - 1
+  #   i = idxs[last]
+  #   pick.append(i)
  
-  # return only the bounding boxes that were picked using the
-  # integer data type
-  return boxes[pick].astype("int")
+  #   # find the largest (x, y) coordinates for the start of
+  #   # the bounding box and the smallest (x, y) coordinates
+  #   # for the end of the bounding box
+  #   xx1 = np.maximum(x1[i], x1[idxs[:last]])
+  #   yy1 = np.maximum(y1[i], y1[idxs[:last]])
+  #   xx2 = np.minimum(x2[i], x2[idxs[:last]])
+  #   yy2 = np.minimum(y2[i], y2[idxs[:last]])
+ 
+  #   # compute the width and height of the bounding box
+  #   w = np.maximum(0, xx2 - xx1 + 1)
+  #   h = np.maximum(0, yy2 - yy1 + 1)
+ 
+  #   # compute the ratio of overlap
+  #   overlap = (w * h) / area[idxs[:last]]
+ 
+  #   # delete all indexes from the index list that have
+  #   idxs = np.delete(idxs, np.concatenate(([last],
+  #     np.where(overlap > threshold)[0])))
+ 
+  # # return only the bounding boxes that were picked using the
+  # # integer data type
+  # return boxes[pick].astype("int")
 
   # # img2 = img.copy()
   # print ("Non-Maximum Suppression")
