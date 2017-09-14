@@ -480,24 +480,24 @@ class hound_dataset(torch.utils.data.Dataset): # Extend PyTorch's Dataset class
 
 # In[ ]:
 
-composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
-new_transform = transforms.Compose([transforms.ToTensor()])
+# composed_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor()])
+
 
 
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.RandomHorizontalFlip(), transforms.ToTensor()])
 # composed_transform = transforms.Compose([transforms.Scale((resnet_input,resnet_input)), transforms.ToTensor()])
 
-train_dataset = hound_dataset(root_dir=root_dir, train=True, val=False, transform=composed_transform) # Supply proper root_dir
+# train_dataset = hound_dataset(root_dir=root_dir, train=True, val=False, transform=composed_transform) # Supply proper root_dir
 # valid_dataset = hound_dataset(root_dir=root_dir, train=False, val=True, transform=composed_transform) # Supply proper root_dir
-test_dataset = hound_dataset(root_dir=root_dir, train=False, val=False, transform=composed_transform) # Supply proper root_dir
+# test_dataset = hound_dataset(root_dir=root_dir, train=False, val=False, transform=composed_transform) # Supply proper root_dir
 
-print('Size of train dataset: %d' % len(train_dataset))
+# print('Size of train dataset: %d' % len(train_dataset))
 # print('Size of valid dataset: %d' % len(valid_dataset))
-print('Size of test dataset: %d' % len(test_dataset))
+# print('Size of test dataset: %d' % len(test_dataset))
 
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+# train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 # valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+# test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
 
 
 
@@ -529,7 +529,7 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch
 
 
 # get_ipython().magic(u'time arya_train()')
-
+'''
 def return_weights(myfile):
   class_freq = {}
   with open(myfile,'r') as inf:
@@ -623,6 +623,9 @@ print ("Batch Size : " + str(batch_size))
 # resnet18.load_state_dict(torch.load(model_file_resnet))  
 # resnet18 = resnet18.eval()
 # acc = test(resnet18)
+
+'''
+
 def relevant_images(val,test,directory):
   test_dict = []
   if test == True:
@@ -649,163 +652,7 @@ def relevant_images(val,test,directory):
 
   return test_dict
 
-def theon_sliding_window(model):
-  window_size = [64, 96, 128]
-  aspect_ratio = [1, 2]
-  stride = 32
-  dirname = 'Data/VOCdevkit_Test/VOC2007/ImageSets/Main'
-  relevat_image_files = relevant_images(val=False,test=True,directory=dirname)
-  images = os.listdir('Data/VOCdevkit_Test/VOC2007/JPEGImages')
-
-  for image in images:
-    if image.strip('.jpg') not in relevat_image_files:
-      continue
-
-    print ("name : " + str(image))
-    # continue
-    # if '001169' not in image:
-    #   continue
-    # all_window_images = torch.zeros(1, 3, 224, 224)
-    # all_window_images = []
-    bd_boxes_dict = []
-    prob_dict = {}
-    val_dict = {}
-    # bd_boxes = []
-    img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
-
-    # img = img.resize((256,256), Image.BILINEAR)
-    # img.show()
-    img2 = img.copy()
-
-    # img2 = img.copy()    
-             
-    print ("Sliding Window")
- 
-    img_width, img_height = img.size
-    c = 0
-    bs = 0
-    idx = 0
-    layer_wise_boxes_dict = {}
-    for wr in window_size:
-      for ar in aspect_ratio:
-        i = 0
-        
-        while i < 2:
-          if ar == 1:
-            window_width = wr
-            window_height = wr*ar
-            i += 2
-
-          else:
-            window_height = wr
-            window_width = wr*ar
-            i += 1
-
-          
-          ymin = 0
-          ymax = ymin + window_height
-          flag_y = False
-          while ymax < img_height:
-            xmin = 0
-            xmax = xmin + window_width
-            flag_x = False
-
-            while xmax < img_width:
-              c += 1
-
-              window_image = img.crop((xmin,ymin,xmax,ymax))
-              window_image = window_image.resize((224,224), Image.BILINEAR)
-              window_image = new_transform(window_image)
-             
-              window_image = window_image.resize_(1, 3, 224, 224)
-              # print ("Here")
-              output = model(Variable(window_image))
-              val, predicted = torch.max(output.data, 1)
-              # val = val.numpy()
-
-              scores = output.data.numpy()
-              if predicted[0] != 0:
-                prob = getProb(output)
-                if prob[0][predicted[0]] > 0.3:
-                  # if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
-                  #   bd_boxes_dict[map_classes_inverse[predicted[0]]] = []
-
-                  temp = []
-                  temp.append(xmin)
-                  temp.append(ymin)
-                  temp.append(xmax)
-                  temp.append(ymax)
-                  # print (scores.shape)
-                  bd_boxes_dict.append(temp)
-                  if ymax not in prob_dict:
-                    prob_dict[ymax] = 0
-                    val_dict[ymax] = 0
-
-                  if prob_dict[ymax] < prob[0][predicted[0]]:
-                    prob_dict[ymax] = prob[0][predicted[0]]
-
-                  val = val.numpy()
-                  # print (val.shape)
-                  if val_dict[ymax] < val:
-                    val_dict[ymax] = val
-                  
-             
-                  # draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
-                  # draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
-                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
-              
-              if flag_x == True:
-                break
-
-              xmin = xmin + stride
-              xmax = xmin + window_width
-              if xmax >= img_width:
-                xmax = img_width - 1
-                flag_x = True
-
-            if flag_y == True:
-              break
-
-            ymin = ymin + stride
-            ymax = ymin + window_height
-
-            if ymax >= img_height:
-              ymax = img_height - 1
-              flag_y = True
- 
-    
-    f = open('Result/' + image.strip('jpg') + 'txt','w')
-    draw = ImageDraw.Draw(img2)
-    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict, prob_dict, val_dict, 0.3)
-    del bd_boxes_dict
-    for new_box in new_boxes:
-      x1 = new_box[0]
-      y1 = new_box[1]
-      x2 = new_box[2]
-      y2 = new_box[3]
-
-      img3 = img2.crop((x1,y1,x2,y2))
-      img3 = img3.resize((224,224), Image.BILINEAR)
-      img3 = new_transform(img3)
-      img3 = img3.resize_((1, 3, 224, 224))
-      output = model(Variable(img3))
-      val, predicted = torch.max(output.data, 1)
-
-      if predicted[0] != 0:
-        category = map_classes_inverse[predicted[0]]
-        prob = getProb(output)
-        if prob[0][predicted[0]] > 0.30:
-          f.write(category + "\t")
-          f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + "\n")
-          draw.rectangle(((x1, y1), (x2, y2)), outline='green')
-          draw.text((x1, y1), category)
-
-    # img2.show()
-    img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
-    f.close()
-    
-
-def sliding_window(model,tune=True):
+def theon_sliding_window(model,tune=True):
 
   if tune == True:
     directory = 'Data/VOCdevkit_Train/VOC2007/'
@@ -820,7 +667,7 @@ def sliding_window(model,tune=True):
   images = os.listdir(directory + 'JPEGImages')
 
   window_size = [64, 96, 128]
-  aspect_ratio = [1, 2]
+  aspect_ratio = [1, 1.5, 2]
   stride = 32
   map_cord_to_score = {}
   boxes = []
@@ -847,15 +694,21 @@ def sliding_window(model,tune=True):
         i = 0
         
         while i < 2:
-          if ar == 1:
+          if i == 0:
             window_width = wr
-            window_height = wr*ar
-            i += 2
+            window_height = int(wr*ar)
+            if ar == 1:
+              i += 2
+            else:
+              i += 1
 
           else:
             window_height = wr
-            window_width = wr*ar
-            i += 1
+            window_width = int(wr*ar)
+            if ar == 1:
+              i += 2
+            else:
+              i += 1
 
           
           ymin = 0
@@ -1078,44 +931,10 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
 
   return boxes[pick].astype("int")
 
-
-
-  # loop over all indexes in the indexes list
-  #   for pos in xrange(last, 0, -1):
-  #     # grab the current index
-  #     j = idxs[pos]
-
-  #     # find the largest (x, y) coordinates for the start of
-  #     # the bounding box and the smallest (x, y) coordinates
-  #     # for the end of the bounding box
-  #     xx1 = max(x1[i], x1[j])
-  #     yy1 = max(y1[i], y1[j])
-  #     xx2 = min(x2[i], x2[j])
-  #     yy2 = min(y2[i], y2[j])
-
-  #     # compute the width and height of the bounding box
-  #     w = max(0, xx2 - xx1 + 1)
-  #     h = max(0, yy2 - yy1 + 1)
-
-  #     # compute the ratio of overlap between the computed
-  #     # bounding box and the bounding box in the area list
-  #     overlap = float(w * h) / area[j]
-
-  #     # if there is sufficient overlap, suppress the
-  #     # current bounding box
-  #     if overlap > threshold:
-  #       suppress.append(pos)
-
-  #   # delete all indexes from the index list that are in the
-  #   # suppression list
-  #   idxs = np.delete(idxs, suppress)
- 
-  # # return only the bounding boxes that were picked
-  # return boxes[pick]  
   
 
 # def daenerys_test(resnet18):
-  
+#   return mAP
 
 def sigmoid (x): 
   return 1/(1 + np.exp(-x))
@@ -1140,6 +959,14 @@ def iou(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
 
       return 1.0 * inter / union
 
+
+new_transform = transforms.Compose([transforms.ToTensor()])
+
+resnet18 = models.resnet18(pretrained=True)
+resnet18.fc = nn.Linear(resnet18.fc.in_features, num_classes)
 resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
-sliding_window(resnet18,False)
+
+theon_sliding_window(resnet18,False)
+# mAP = daenerys_test(resnet18,False)
+# print ("Mean Average Precision : " + str(mAP))
