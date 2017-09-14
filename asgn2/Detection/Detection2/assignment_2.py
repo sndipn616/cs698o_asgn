@@ -674,7 +674,7 @@ def theon_sliding_window(model):
     img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
 
     # img = img.resize((256,256), Image.BILINEAR)
-    img.show()
+    # img.show()
     img2 = img.copy()
 
     # img2 = img.copy()    
@@ -776,7 +776,7 @@ def theon_sliding_window(model):
     
     f = open('Result/' + image.strip('jpg') + 'txt','w')
     draw = ImageDraw.Draw(img2)
-    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict, prob_dict, val_dict, 0.7)
+    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict, prob_dict, val_dict, 0.3)
     del bd_boxes_dict
     for new_box in new_boxes:
       x1 = new_box[0]
@@ -800,12 +800,12 @@ def theon_sliding_window(model):
           draw.rectangle(((x1, y1), (x2, y2)), outline='green')
           draw.text((x1, y1), category)
 
-    img2.show()
+    # img2.show()
     img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
     f.close()
     
 
-def sliding_window(tune=True,model):
+def sliding_window(model,tune=True):
 
   if tune == True:
     directory = 'Data/VOCdevkit_Train/VOC2007/'
@@ -823,13 +823,17 @@ def sliding_window(tune=True,model):
   aspect_ratio = [1, 2]
   stride = 32
   map_cord_to_score = {}
+  boxes = []
   for image in images:
     if image.strip('.jpg') not in relevant_image_files:
       continue
 
+    if image != '003931.jpg':
+      continue
+
     print ("name : " + str(image))
 
-    img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
+    img = Image.open(directory + 'JPEGImages/' +  image)
 
     img.show()
     img2 = img.copy()
@@ -837,7 +841,7 @@ def sliding_window(tune=True,model):
     print ("Sliding Window")
  
     img_width, img_height = img.size
-
+    c = 0
     for wr in window_size:
       for ar in aspect_ratio:
         i = 0
@@ -885,14 +889,16 @@ def sliding_window(tune=True,model):
                   temp.append(ymin)
                   temp.append(xmax)
                   temp.append(ymax)
-                  # temp.append(val)
 
-                  if val not in map_cord_to_score:
-                    map_cord_to_score[val] = temp
+                  boxes.append(temp)
+                  # temp.append(val)
+                  # print (val)
+                  if val[0] not in map_cord_to_score:
+                    map_cord_to_score[val[0]] = temp
 
 
                  
-                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
+                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val[0]) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
               
               if flag_x == True:
                 break
@@ -916,7 +922,8 @@ def sliding_window(tune=True,model):
 
     f = open('Result/' + image.strip('jpg') + 'txt','w')
     draw = ImageDraw.Draw(img2)
-    new_boxes = aegon_targaryen_non_maximum_supression(map_cord_to_score, 0.5)    
+    new_boxes = aegon_targaryen_non_maximum_supression(map_cord_to_score, 0.3)    
+    # new_boxes = non_max_suppression_fast(boxes, 0.3)
     for new_box in new_boxes:
       x1 = new_box[0]
       y1 = new_box[1]
@@ -943,25 +950,88 @@ def sliding_window(tune=True,model):
     img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
     f.close()
 
+def non_max_suppression_fast(boxes, overlapThresh):
+  # if there are no boxes, return an empty list
+  if len(boxes) == 0:
+    return []
+
+  boxes = np.array(boxes)
+  # if the bounding boxes integers, convert them to floats --
+  # this is important since we'll be doing a bunch of divisions
+  if boxes.dtype.kind == "i":
+    boxes = boxes.astype("float")
+ 
+  # initialize the list of picked indexes 
+  pick = []
+ 
+  # grab the coordinates of the bounding boxes
+  x1 = boxes[:,0]
+  y1 = boxes[:,1]
+  x2 = boxes[:,2]
+  y2 = boxes[:,3]
+ 
+  # compute the area of the bounding boxes and sort the bounding
+  # boxes by the bottom-right y-coordinate of the bounding box
+  area = (x2 - x1 + 1) * (y2 - y1 + 1)
+  idxs = np.argsort(y2)
+ 
+  # keep looping while some indexes still remain in the indexes
+  # list
+  while len(idxs) > 0:
+    # grab the last index in the indexes list and add the
+    # index value to the list of picked indexes
+    last = len(idxs) - 1
+    i = idxs[last]
+    pick.append(i)
+    
+    # find the largest (x, y) coordinates for the start of
+    # the bounding box and the smallest (x, y) coordinates
+    # for the end of the bounding box
+    xx1 = np.maximum(x1[i], x1[idxs[:last]])
+    yy1 = np.maximum(y1[i], y1[idxs[:last]])
+    xx2 = np.minimum(x2[i], x2[idxs[:last]])
+    yy2 = np.minimum(y2[i], y2[idxs[:last]])
+ 
+    # compute the width and height of the bounding box
+    w = np.maximum(0, xx2 - xx1 + 1)
+    h = np.maximum(0, yy2 - yy1 + 1)
+ 
+    # compute the ratio of overlap
+    overlap = (w * h) / area[idxs[:last]]
+ 
+    # delete all indexes from the index list that have
+    idxs = np.delete(idxs, np.concatenate(([last],
+      np.where(overlap > overlapThresh)[0])))
+ 
+  # return only the bounding boxes that were picked using the
+  # integer data type
+  return boxes[pick].astype("int")
+
 
 def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
   # if there are no boxes, return an empty list
   print ("Non-Maximum Suppression")
   # boxes = np.asarray(boxes)
 
-  if len(boxes) == 0:
-    return []
+  # if len(boxes) == 0:
+  #   return []
  
   # initialize the list of picked indexes
   pick = []
-  print ("Before Shape : " + str(boxes.shape))
+  # print ("Before Shape : " + str(boxes.shape))
   
   # score = boxes[:,4]
   idxs = []
-  for box, score in sorted(map_cord_to_score.iteritems(), key=lambda (k,v): (v,k)):
+  # for score, box in sorted(map_cord_to_score.iteritems(), key=lambda (k,v): (v,k)):
+  #   idxs.append(box)
+  for score, box in sorted(map_cord_to_score.iteritems()):
+    # print (score)
     idxs.append(box)
 
   # grab the coordinates of the bounding boxes
+  idxs = np.array(idxs)
+  # print (idxs.shape)
+  # print (len(idxs))
   x1 = idxs[:,0]
   y1 = idxs[:,1]
   x2 = idxs[:,2]
@@ -977,15 +1047,20 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
 
   # keep looping while some indexes still remain in the indexes
   # list
+  # j = 0
   while len(idxs) > 0:
     # grab the last index in the indexes list, add the index
     # value to the list of picked indexes, then initialize
     # the suppression list (i.e. indexes that will be deleted)
     # using the last index
+    # print (idxs.shape)
     last = len(idxs) - 1
     i = last
+    # print (j)
+    # j += 1
     pick.append(i)
-
+    # print (x1[i])
+    # print (x1[:last])
     xx1 = np.maximum(x1[i], x1[:last])
     yy1 = np.maximum(y1[i], y1[:last])
     xx2 = np.minimum(x2[i], x2[:last])
@@ -999,7 +1074,7 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
  
     # delete all indexes from the index list that have
     idxs = np.delete(idxs, np.concatenate(([last],
-      np.where(overlap > threshold)[0])))
+      np.where(overlap > threshold)[0])), 0)
 
   return boxes[pick].astype("int")
 
@@ -1039,8 +1114,8 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
   # return boxes[pick]  
   
 
-def daenerys_test(resnet18):
-  return 0
+# def daenerys_test(resnet18):
+  
 
 def sigmoid (x): 
   return 1/(1 + np.exp(-x))
@@ -1067,4 +1142,4 @@ def iou(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
 
 resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
-sliding_window(true, resnet18)
+sliding_window(resnet18,False)
