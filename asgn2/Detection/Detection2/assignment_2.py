@@ -623,16 +623,20 @@ print ("Batch Size : " + str(batch_size))
 # resnet18.load_state_dict(torch.load(model_file_resnet))  
 # resnet18 = resnet18.eval()
 # acc = test(resnet18)
-def relevant_images():
+def relevant_images(val,test,directory):
   test_dict = []
+  if test == True:
+    split_text = '_test.txt'
+  elif val == True:
+    split_text = '_val.txt'
 
-  for files in os.listdir(os.path.join(root_dir, imageset_folder_test)):
+  for files in os.listdir(directory):
    
-    temp_file = files.split('_test.txt')[0]          
+    temp_file = files.split(split_text)[0]          
     if temp_file in classes:
       # print (files)
 
-      f = open(os.path.join(root_dir, imageset_folder_test, files ),'r')
+      f = open(os.path.join(directory, files ),'r')
       line = f.readline()
       while (line):              
         temp = line.split(' ')
@@ -649,8 +653,8 @@ def theon_sliding_window(model):
   window_size = [64, 96, 128]
   aspect_ratio = [1, 2]
   stride = 32
-
-  relevat_image_files = relevant_images()
+  dirname = 'Data/VOCdevkit_Test/VOC2007/ImageSets/Main'
+  relevat_image_files = relevant_images(val=False,test=True,directory=dirname)
   images = os.listdir('Data/VOCdevkit_Test/VOC2007/JPEGImages')
 
   for image in images:
@@ -801,11 +805,149 @@ def theon_sliding_window(model):
     f.close()
     
 
+def sliding_window(tune=True,model):
 
-def aegon_targaryen_non_maximum_supression(boxes, prob_dict, val_dict, threshold = 0.3):
+  if tune == True:
+    directory = 'Data/VOCdevkit_Train/VOC2007/'
+    dirname = directory + 'ImageSets/Main'
+    relevant_image_files = relevant_images(val=True,test=False,directory=dirname)
+
+  else:
+    directory = 'Data/VOCdevkit_Test/VOC2007/'
+    dirname = directory + 'ImageSets/Main'
+    relevant_image_files = relevant_images(val=False,test=True,directory=dirname)
+
+  images = os.listdir(directory + 'JPEGImages')
+
+  window_size = [64, 96, 128]
+  aspect_ratio = [1, 2]
+  stride = 32
+  map_cord_to_score = {}
+  for image in images:
+    if image.strip('.jpg') not in relevant_image_files:
+      continue
+
+    print ("name : " + str(image))
+
+    img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
+
+    img.show()
+    img2 = img.copy()
+
+    print ("Sliding Window")
+ 
+    img_width, img_height = img.size
+
+    for wr in window_size:
+      for ar in aspect_ratio:
+        i = 0
+        
+        while i < 2:
+          if ar == 1:
+            window_width = wr
+            window_height = wr*ar
+            i += 2
+
+          else:
+            window_height = wr
+            window_width = wr*ar
+            i += 1
+
+          
+          ymin = 0
+          ymax = ymin + window_height
+          flag_y = False
+          while ymax < img_height:
+            xmin = 0
+            xmax = xmin + window_width
+            flag_x = False
+
+            while xmax < img_width:
+              c += 1
+
+              window_image = img.crop((xmin,ymin,xmax,ymax))
+              window_image = window_image.resize((224,224), Image.BILINEAR)
+              window_image = new_transform(window_image)
+             
+              window_image = window_image.resize_(1, 3, 224, 224)
+              # print ("Here")
+              output = model(Variable(window_image))
+              val, predicted = torch.max(output.data, 1)
+              val = val.numpy()
+
+              scores = output.data.numpy()
+              if predicted[0] != 0:
+                prob = getProb(output)
+                if prob[0][predicted[0]] > 0.3:
+
+                  temp = []
+                  temp.append(xmin)
+                  temp.append(ymin)
+                  temp.append(xmax)
+                  temp.append(ymax)
+                  # temp.append(val)
+
+                  if val not in map_cord_to_score:
+                    map_cord_to_score[val] = temp
+
+
+                 
+                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
+              
+              if flag_x == True:
+                break
+
+              xmin = xmin + stride
+              xmax = xmin + window_width
+              if xmax >= img_width:
+                xmax = img_width - 1
+                flag_x = True
+
+            if flag_y == True:
+              break
+
+            ymin = ymin + stride
+            ymax = ymin + window_height
+
+            if ymax >= img_height:
+              ymax = img_height - 1
+              flag_y = True
+
+
+    f = open('Result/' + image.strip('jpg') + 'txt','w')
+    draw = ImageDraw.Draw(img2)
+    new_boxes = aegon_targaryen_non_maximum_supression(map_cord_to_score, 0.5)    
+    for new_box in new_boxes:
+      x1 = new_box[0]
+      y1 = new_box[1]
+      x2 = new_box[2]
+      y2 = new_box[3]
+
+      img3 = img2.crop((x1,y1,x2,y2))
+      img3 = img3.resize((224,224), Image.BILINEAR)
+      img3 = new_transform(img3)
+      img3 = img3.resize_((1, 3, 224, 224))
+      output = model(Variable(img3))
+      val, predicted = torch.max(output.data, 1)
+
+      if predicted[0] != 0:
+        category = map_classes_inverse[predicted[0]]
+        prob = getProb(output)
+        if prob[0][predicted[0]] > 0.3:
+          f.write(category + "\t")
+          f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + "\n")
+          draw.rectangle(((x1, y1), (x2, y2)), outline='green')
+          draw.text((x1, y1), category)
+
+    img2.show()
+    img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
+    f.close()
+
+
+def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
   # if there are no boxes, return an empty list
   print ("Non-Maximum Suppression")
-  boxes = np.asarray(boxes)
+  # boxes = np.asarray(boxes)
 
   if len(boxes) == 0:
     return []
@@ -813,22 +955,25 @@ def aegon_targaryen_non_maximum_supression(boxes, prob_dict, val_dict, threshold
   # initialize the list of picked indexes
   pick = []
   print ("Before Shape : " + str(boxes.shape))
-  # grab the coordinates of the bounding boxes
-  x1 = boxes[:,0]
-  y1 = boxes[:,1]
-  x2 = boxes[:,2]
-  y2 = boxes[:,3]
- 
-  reqd_y2 = []
-  for key, value in sorted(val_dict.iteritems(), key=lambda (k,v): (v,k)):
-    reqd_y2.append(key)
+  
+  # score = boxes[:,4]
+  idxs = []
+  for box, score in sorted(map_cord_to_score.iteritems(), key=lambda (k,v): (v,k)):
+    idxs.append(box)
 
+  # grab the coordinates of the bounding boxes
+  x1 = idxs[:,0]
+  y1 = idxs[:,1]
+  x2 = idxs[:,2]
+  y2 = idxs[:,3]
+
+  boxes = idxs
   # reqd_y2 = np.array(reqd_y2)
   # compute the area of the bounding boxes and sort the bounding
   # boxes by the bottom-right y-coordinate of the bounding box
   area = (x2 - x1 + 1) * (y2 - y1 + 1)
-  # idxs = np.argsort(y2)
-  idxs = np.argsort(reqd_y2)
+  # idxs = np.argsort(score)
+  # idxs = np.argsort(reqd_y2)
 
   # keep looping while some indexes still remain in the indexes
   # list
@@ -838,42 +983,60 @@ def aegon_targaryen_non_maximum_supression(boxes, prob_dict, val_dict, threshold
     # the suppression list (i.e. indexes that will be deleted)
     # using the last index
     last = len(idxs) - 1
-    i = idxs[last]
+    i = last
     pick.append(i)
-    suppress = [last]
+
+    xx1 = np.maximum(x1[i], x1[:last])
+    yy1 = np.maximum(y1[i], y1[:last])
+    xx2 = np.minimum(x2[i], x2[:last])
+    yy2 = np.minimum(y2[i], y2[:last])
+
+    w = np.maximum(0, xx2 - xx1 + 1)
+    h = np.maximum(0, yy2 - yy1 + 1)
+ 
+    # compute the ratio of overlap
+    overlap = (w * h) / area[:last]
+ 
+    # delete all indexes from the index list that have
+    idxs = np.delete(idxs, np.concatenate(([last],
+      np.where(overlap > threshold)[0])))
+
+  return boxes[pick].astype("int")
+
+
 
   # loop over all indexes in the indexes list
-    for pos in xrange(0, last):
-      # grab the current index
-      j = idxs[pos]
+  #   for pos in xrange(last, 0, -1):
+  #     # grab the current index
+  #     j = idxs[pos]
 
-      # find the largest (x, y) coordinates for the start of
-      # the bounding box and the smallest (x, y) coordinates
-      # for the end of the bounding box
-      xx1 = max(x1[i], x1[j])
-      yy1 = max(y1[i], y1[j])
-      xx2 = min(x2[i], x2[j])
-      yy2 = min(y2[i], y2[j])
+  #     # find the largest (x, y) coordinates for the start of
+  #     # the bounding box and the smallest (x, y) coordinates
+  #     # for the end of the bounding box
+  #     xx1 = max(x1[i], x1[j])
+  #     yy1 = max(y1[i], y1[j])
+  #     xx2 = min(x2[i], x2[j])
+  #     yy2 = min(y2[i], y2[j])
 
-      # compute the width and height of the bounding box
-      w = max(0, xx2 - xx1 + 1)
-      h = max(0, yy2 - yy1 + 1)
+  #     # compute the width and height of the bounding box
+  #     w = max(0, xx2 - xx1 + 1)
+  #     h = max(0, yy2 - yy1 + 1)
 
-      # compute the ratio of overlap between the computed
-      # bounding box and the bounding box in the area list
-      overlap = float(w * h) / area[j]
+  #     # compute the ratio of overlap between the computed
+  #     # bounding box and the bounding box in the area list
+  #     overlap = float(w * h) / area[j]
 
-      # if there is sufficient overlap, suppress the
-      # current bounding box
-      if overlap > threshold:
-        suppress.append(pos)
+  #     # if there is sufficient overlap, suppress the
+  #     # current bounding box
+  #     if overlap > threshold:
+  #       suppress.append(pos)
 
-    # delete all indexes from the index list that are in the
-    # suppression list
-    idxs = np.delete(idxs, suppress)
+  #   # delete all indexes from the index list that are in the
+  #   # suppression list
+  #   idxs = np.delete(idxs, suppress)
  
-  # return only the bounding boxes that were picked
-  return boxes[pick]  
+  # # return only the bounding boxes that were picked
+  # return boxes[pick]  
   
 
 def daenerys_test(resnet18):
@@ -904,4 +1067,4 @@ def iou(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
 
 resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
-theon_sliding_window(resnet18)
+sliding_window(true, resnet18)
