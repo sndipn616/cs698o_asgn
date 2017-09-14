@@ -772,7 +772,7 @@ def theon_sliding_window(model):
     
     f = open('Result/' + image.strip('jpg') + 'txt','w')
     draw = ImageDraw.Draw(img2)
-    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict, prob_dict, val_dict, 0.5)
+    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict, prob_dict, val_dict, 0.7)
     del bd_boxes_dict
     for new_box in new_boxes:
       x1 = new_box[0]
@@ -819,16 +819,16 @@ def aegon_targaryen_non_maximum_supression(boxes, prob_dict, val_dict, threshold
   x2 = boxes[:,2]
   y2 = boxes[:,3]
  
-  # reqd_y2 = []
-  # for key, value in sorted(val_dict.iteritems(), key=lambda (k,v): (v,k)):
-  #   reqd_y2.append(key)
+  reqd_y2 = []
+  for key, value in sorted(val_dict.iteritems(), key=lambda (k,v): (v,k)):
+    reqd_y2.append(key)
 
   # reqd_y2 = np.array(reqd_y2)
   # compute the area of the bounding boxes and sort the bounding
   # boxes by the bottom-right y-coordinate of the bounding box
   area = (x2 - x1 + 1) * (y2 - y1 + 1)
-  idxs = np.argsort(y2)
-  # idxs = np.argsort(reqd_y2)
+  # idxs = np.argsort(y2)
+  idxs = np.argsort(reqd_y2)
 
   # keep looping while some indexes still remain in the indexes
   # list
