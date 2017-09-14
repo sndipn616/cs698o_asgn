@@ -666,17 +666,21 @@ def theon_sliding_window(model,tune=True):
 
   images = os.listdir(directory + 'JPEGImages')
 
-  window_size = [64, 96, 128]
+  window_size = [80, 100, 120]
   aspect_ratio = [1, 1.5, 2]
-  stride = 32
+  stride = 40
   map_cord_to_score = {}
   boxes = []
+  num = 0
   for image in images:
     if image.strip('.jpg') not in relevant_image_files:
       continue
 
-    if image != '003931.jpg':
-      continue
+    num += 1
+    if num == 10:
+      break
+    # if image != '003931.jpg':
+    #   continue
 
     print ("name : " + str(image))
 
@@ -877,7 +881,10 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
   
 
 def daenerys_test(resnet18,val):
-  mAP = np.zeros(num_classes - 1)
+  # mAP = np.zeros(num_classes - 1)
+  tp = np.zeros(num_classes - 1)
+  fp = np.zeros(num_classes - 1)
+
   if val == True:
     directory = 'Data/VOCdevkit_Train/VOC2007/'
     dirname = directory + 'ImageSets/Main'
@@ -890,14 +897,53 @@ def daenerys_test(resnet18,val):
 
   result_directory = 'Result/'
   result_image_files = os.listdir(result_directory)
+  
   for result_image_file in result_image_files:
     if result_image_file.endswith('.jpg'):
       img = Image.open(result_directory + result_image_file)
-      img.show()
+      # img.show()
       txtfilename = result_image_file.split('_bd.jpg')[0] + '.txt'
-      print (txtfilename)
+      annotation_filename = result_image_file.split('_bd.jpg')[0] + '.xml'
+      object_map = parse_annotation(directory + 'Annotations/' + annotation_filename)
+      
+      f = open(result_directory + txtfilename, 'r')
+      line = f.readline()
+      while line:
+        cl = map_classes[line.split('\t')[0]] - 1
+        x1 = int(line.split('\t')[1].split(',')[0])
+        y1 = int(line.split('\t')[1].split(',')[1])
+        x2 = int(line.split('\t')[1].split(',')[2])
+        y2 = int(line.split('\t')[1].split(',')[3].strip('\n'))
 
-  return 0
+        tp2, fp2 = check_with_annotations(x1,y1,x2,y2, cl+1, object_map) 
+
+        tp[cl] += tp2
+        fp[cl] += fp2
+
+        line = f.readline()
+
+  mAP = 1.0 * tp / (tp + fp)
+
+  return mAP
+
+def check_with_annotations(x1,y1,x2,y2, cl, object_map):
+  
+  for cat in object_map:
+    # print (cl)
+    if cat == map_classes_inverse[cl]:
+      temp = object_map[cat]
+      # print (temp)
+      xmin = temp[0]['xmin']
+      ymin = temp[0]['ymin']
+      xmax = temp[0]['xmax']
+      ymax = temp[0]['ymax']
+
+      print (iou(x1,y1,x2,y2,xmin,ymin,xmax,ymax))
+      if iou(x1,y1,x2,y2,xmin,ymin,xmax,ymax) > 0.5:
+        return 1, 0
+
+  return 0, 1
+
 
 def sigmoid (x): 
   return 1/(1 + np.exp(-x))
@@ -951,6 +997,11 @@ resnet18.fc = nn.Linear(resnet18.fc.in_features, num_classes)
 resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
 
-# theon_sliding_window(resnet18,False)
+theon_sliding_window(resnet18,False)
 mAP = daenerys_test(resnet18,False)
-# print ("Mean Average Precision : " + str(mAP))
+print ("Precisions : " + str(mAP))
+sp = 0
+for p in mAP:
+  sp += p
+
+print ("mAP : " + str(sp / 5.0))
