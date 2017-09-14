@@ -652,7 +652,7 @@ def relevant_images(val,test,directory):
 
   return test_dict
 
-def theon_sliding_window(model,tune=True):
+def theon_sliding_window(model,sl,thr1,thr2,tune=True):
 
   if tune == True:
     directory = 'Data/VOCdevkit_Train/VOC2007/'
@@ -666,7 +666,7 @@ def theon_sliding_window(model,tune=True):
 
   images = os.listdir(directory + 'JPEGImages')
 
-  window_size = [80, 100, 120]
+  window_size = [80, 110, 140]
   aspect_ratio = [1, 1.5, 2]
   stride = 40
   map_cord_to_score = {}
@@ -677,7 +677,7 @@ def theon_sliding_window(model,tune=True):
       continue
 
     num += 1
-    if num == 10:
+    if num == 251:
       break
     # if image != '003931.jpg':
     #   continue
@@ -686,7 +686,7 @@ def theon_sliding_window(model,tune=True):
 
     img = Image.open(directory + 'JPEGImages/' +  image)
 
-    img.show()
+    # img.show()
     img2 = img.copy()
 
     print ("Sliding Window")
@@ -739,7 +739,7 @@ def theon_sliding_window(model,tune=True):
               scores = output.data.numpy()
               if predicted[0] != 0:
                 prob = getProb(output)
-                if prob[0][predicted[0]] > 0.3:
+                if prob[0][predicted[0]] > thr1:
 
                   temp = []
                   temp.append(xmin)
@@ -777,9 +777,9 @@ def theon_sliding_window(model,tune=True):
               flag_y = True
 
 
-    f = open('Result/' + image.strip('jpg') + 'txt','w')
+    f = open('Result' + str(sl) + '/' + image.strip('jpg') + 'txt','w')
     draw = ImageDraw.Draw(img2)
-    new_boxes = aegon_targaryen_non_maximum_supression(map_cord_to_score, 0.3)    
+    new_boxes = aegon_targaryen_non_maximum_supression(map_cord_to_score, thr2)    
     # new_boxes = non_max_suppression_fast(boxes, 0.3)
     for new_box in new_boxes:
       x1 = new_box[0]
@@ -797,14 +797,14 @@ def theon_sliding_window(model,tune=True):
       if predicted[0] != 0:
         category = map_classes_inverse[predicted[0]]
         prob = getProb(output)
-        if prob[0][predicted[0]] > 0.3:
+        if prob[0][predicted[0]] > thr1:
           f.write(category + "\t")
           f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + "\n")
           draw.rectangle(((x1, y1), (x2, y2)), outline='green')
           draw.text((x1, y1), category)
 
-    img2.show()
-    img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
+    # img2.show()
+    img2.save('Result' + str(sl) + '/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
     f.close()
 
 
@@ -880,7 +880,7 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
 
   
 
-def daenerys_test(resnet18,val):
+def daenerys_test(resnet18,sl,val,thr):
   # mAP = np.zeros(num_classes - 1)
   tp = np.zeros(num_classes - 1)
   fp = np.zeros(num_classes - 1)
@@ -895,7 +895,7 @@ def daenerys_test(resnet18,val):
     dirname = directory + 'ImageSets/Main'
     relevant_image_files = relevant_images(val=False,test=True,directory=dirname)
 
-  result_directory = 'Result/'
+  result_directory = 'Result' + str(sl) + '/'
   result_image_files = os.listdir(result_directory)
   
   for result_image_file in result_image_files:
@@ -915,7 +915,7 @@ def daenerys_test(resnet18,val):
         x2 = int(line.split('\t')[1].split(',')[2])
         y2 = int(line.split('\t')[1].split(',')[3].strip('\n'))
 
-        tp2, fp2 = check_with_annotations(x1,y1,x2,y2, cl+1, object_map) 
+        tp2, fp2 = check_with_annotations(x1,y1,x2,y2, cl+1, object_map, thr) 
 
         tp[cl] += tp2
         fp[cl] += fp2
@@ -926,7 +926,7 @@ def daenerys_test(resnet18,val):
 
   return mAP
 
-def check_with_annotations(x1,y1,x2,y2, cl, object_map):
+def check_with_annotations(x1,y1,x2,y2, cl, object_map, thr):
   
   for cat in object_map:
     # print (cl)
@@ -939,7 +939,7 @@ def check_with_annotations(x1,y1,x2,y2, cl, object_map):
       ymax = temp[0]['ymax']
 
       print (iou(x1,y1,x2,y2,xmin,ymin,xmax,ymax))
-      if iou(x1,y1,x2,y2,xmin,ymin,xmax,ymax) > 0.5:
+      if iou(x1,y1,x2,y2,xmin,ymin,xmax,ymax) > thr:
         return 1, 0
 
   return 0, 1
@@ -997,11 +997,37 @@ resnet18.fc = nn.Linear(resnet18.fc.in_features, num_classes)
 resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
 
-theon_sliding_window(resnet18,False)
-mAP = daenerys_test(resnet18,False)
-print ("Precisions : " + str(mAP))
-sp = 0
-for p in mAP:
-  sp += p
 
-print ("mAP : " + str(sp / 5.0))
+f = open('result.txt','w')
+
+theon_sliding_window(resnet18,1,0.3,0.3,False)
+mAP = daenerys_test(resnet18,1,False,0.5)
+print ("Precisions : " + str(mAP))
+print ("mAP : " + str(np.sum(mAP ) / 5.0))
+f.write('With (0.3, 0.3, 0.5), mAP = ' + str(np.sum(mAP ) / 5.0))
+mAP = daenerys_test(resnet18,1,False,0.3)
+print ("Precisions : " + str(mAP))
+print ("mAP : " + str(np.sum(mAP ) / 5.0))
+f.write('With (0.3, 0.3, 0.3), mAP = ' + str(np.sum(mAP ) / 5.0))
+
+theon_sliding_window(resnet18,2,0.32,0.25,False)
+mAP = daenerys_test(resnet18,2,False,0.5)
+print ("Precisions : " + str(mAP))
+print ("mAP : " + str(np.sum(mAP ) / 5.0))
+f.write('With (0.32, 0.25, 0.5), mAP = ' + str(np.sum(mAP ) / 5.0))
+mAP = daenerys_test(resnet18,2,False,0.3)
+print ("Precisions : " + str(mAP))
+print ("mAP : " + str(np.sum(mAP ) / 5.0))
+f.write('With (0.32, 0.25, 0.3), mAP = ' + str(np.sum(mAP ) / 5.0))
+
+theon_sliding_window(resnet18,3,0.28,0.32,False)
+mAP = daenerys_test(resnet18,3,False,0.5)
+print ("Precisions : " + str(mAP))
+print ("mAP : " + str(np.sum(mAP ) / 5.0))
+f.write('With (0.28, 0.32, 0.5), mAP = ' + str(np.sum(mAP ) / 5.0))
+mAP = daenerys_test(resnet18,3,False,0.3)
+print ("Precisions : " + str(mAP))
+print ("mAP : " + str(np.sum(mAP ) / 5.0))
+f.write('With (0.28, 0.32, 0.3), mAP = ' + str(np.sum(mAP ) / 5.0))
+
+f.close()
