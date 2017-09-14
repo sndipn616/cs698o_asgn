@@ -803,63 +803,6 @@ def theon_sliding_window(model,tune=True):
     img2.save('Result/' + image.strip('.jpg') + '_bd.jpg', "JPEG" )
     f.close()
 
-def non_max_suppression_fast(boxes, overlapThresh):
-  # if there are no boxes, return an empty list
-  if len(boxes) == 0:
-    return []
-
-  boxes = np.array(boxes)
-  # if the bounding boxes integers, convert them to floats --
-  # this is important since we'll be doing a bunch of divisions
-  if boxes.dtype.kind == "i":
-    boxes = boxes.astype("float")
- 
-  # initialize the list of picked indexes 
-  pick = []
- 
-  # grab the coordinates of the bounding boxes
-  x1 = boxes[:,0]
-  y1 = boxes[:,1]
-  x2 = boxes[:,2]
-  y2 = boxes[:,3]
- 
-  # compute the area of the bounding boxes and sort the bounding
-  # boxes by the bottom-right y-coordinate of the bounding box
-  area = (x2 - x1 + 1) * (y2 - y1 + 1)
-  idxs = np.argsort(y2)
- 
-  # keep looping while some indexes still remain in the indexes
-  # list
-  while len(idxs) > 0:
-    # grab the last index in the indexes list and add the
-    # index value to the list of picked indexes
-    last = len(idxs) - 1
-    i = idxs[last]
-    pick.append(i)
-    
-    # find the largest (x, y) coordinates for the start of
-    # the bounding box and the smallest (x, y) coordinates
-    # for the end of the bounding box
-    xx1 = np.maximum(x1[i], x1[idxs[:last]])
-    yy1 = np.maximum(y1[i], y1[idxs[:last]])
-    xx2 = np.minimum(x2[i], x2[idxs[:last]])
-    yy2 = np.minimum(y2[i], y2[idxs[:last]])
- 
-    # compute the width and height of the bounding box
-    w = np.maximum(0, xx2 - xx1 + 1)
-    h = np.maximum(0, yy2 - yy1 + 1)
- 
-    # compute the ratio of overlap
-    overlap = (w * h) / area[idxs[:last]]
- 
-    # delete all indexes from the index list that have
-    idxs = np.delete(idxs, np.concatenate(([last],
-      np.where(overlap > overlapThresh)[0])))
- 
-  # return only the bounding boxes that were picked using the
-  # integer data type
-  return boxes[pick].astype("int")
-
 
 def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
   # if there are no boxes, return an empty list
@@ -933,8 +876,28 @@ def aegon_targaryen_non_maximum_supression(map_cord_to_score, threshold = 0.3):
 
   
 
-# def daenerys_test(resnet18):
-#   return mAP
+def daenerys_test(resnet18,val):
+  mAP = np.zeros(num_classes - 1)
+  if val == True:
+    directory = 'Data/VOCdevkit_Train/VOC2007/'
+    dirname = directory + 'ImageSets/Main'
+    relevant_image_files = relevant_images(val=True,test=False,directory=dirname)
+
+  else:
+    directory = 'Data/VOCdevkit_Test/VOC2007/'
+    dirname = directory + 'ImageSets/Main'
+    relevant_image_files = relevant_images(val=False,test=True,directory=dirname)
+
+  result_directory = 'Result/'
+  result_image_files = os.listdir(result_directory)
+  for result_image_file in result_image_files:
+    if result_image_file.endswith('.jpg'):
+      img = Image.open(result_directory + result_image_file)
+      img.show()
+      txtfilename = result_image_file.split('_bd.jpg')[0] + '.txt'
+      print (txtfilename)
+
+  return 0
 
 def sigmoid (x): 
   return 1/(1 + np.exp(-x))
@@ -945,6 +908,27 @@ def getProb(output):
   p = p / np.sum(p)
 
   return p
+
+def parse_annotation(filename):
+  tree = et.parse(filename)
+  root = tree.getroot()
+  object_map = {}
+  for obj in root.iter('object'):
+    name = obj.find('name').text
+    if name not in object_map:
+      object_map[name] = []
+
+    temp = {}
+    bnd = obj.find('bndbox')
+
+    temp['xmin'] = int(bnd.find('xmin').text)
+    temp['ymin'] = int(bnd.find('ymin').text)
+    temp['xmax'] = int(bnd.find('xmax').text)
+    temp['ymax'] = int(bnd.find('ymax').text)
+
+    object_map[name].append(temp)  
+    
+  return object_map
 
 def iou(xmin1,ymin1,xmax1,ymax1,xmin2,ymin2,xmax2,ymax2):
       x_len = min(xmax1,xmax2) - max(xmin1,xmin2)
@@ -967,6 +951,6 @@ resnet18.fc = nn.Linear(resnet18.fc.in_features, num_classes)
 resnet18.load_state_dict(torch.load(model_file_resnet, map_location=lambda storage, loc: storage)) 
 resnet18 = resnet18.eval()
 
-theon_sliding_window(resnet18,False)
-# mAP = daenerys_test(resnet18,False)
+# theon_sliding_window(resnet18,False)
+mAP = daenerys_test(resnet18,False)
 # print ("Mean Average Precision : " + str(mAP))
