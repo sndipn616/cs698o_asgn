@@ -648,7 +648,7 @@ def relevant_images():
 def theon_sliding_window(model):
   window_size = [64, 96, 128]
   aspect_ratio = [1, 2]
-  stride = 20
+  stride = 32
 
   relevat_image_files = relevant_images()
   images = os.listdir('Data/VOCdevkit_Test/VOC2007/JPEGImages')
@@ -664,6 +664,8 @@ def theon_sliding_window(model):
     # all_window_images = torch.zeros(1, 3, 224, 224)
     # all_window_images = []
     bd_boxes_dict = []
+    prob_dict = {}
+    val_dict = {}
     # bd_boxes = []
     img = Image.open('Data/VOCdevkit_Test/VOC2007/JPEGImages/' +  image)
 
@@ -678,7 +680,8 @@ def theon_sliding_window(model):
     img_width, img_height = img.size
     c = 0
     bs = 0
-      
+    idx = 0
+    layer_wise_boxes_dict = {}
     for wr in window_size:
       for ar in aspect_ratio:
         i = 0
@@ -719,7 +722,7 @@ def theon_sliding_window(model):
               scores = output.data.numpy()
               if predicted[0] != 0:
                 prob = getProb(output)
-                if prob[0][predicted[0]] > 0.2:
+                if prob[0][predicted[0]] > 0.3:
                   # if map_classes_inverse[predicted[0]] not in bd_boxes_dict:
                   #   bd_boxes_dict[map_classes_inverse[predicted[0]]] = []
 
@@ -730,10 +733,22 @@ def theon_sliding_window(model):
                   temp.append(ymax)
                   # print (scores.shape)
                   bd_boxes_dict.append(temp)
+                  if ymax not in prob_dict:
+                    prob_dict[ymax] = 0
+                    val_dict[ymax] = 0
+
+                  if prob_dict[ymax] < prob[0][predicted[0]]:
+                    prob_dict[ymax] = prob[0][predicted[0]]
+
+                  val = val.numpy()
+                  # print (val.shape)
+                  if val_dict[ymax] < val:
+                    val_dict[ymax] = val
+                  
              
                   # draw.rectangle(((xmin, ymin), (xmax, ymax)),outline='red')
                   # draw.text((xmin, ymin), map_classes_inverse[predicted[0]])
-                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val.numpy()) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
+                  print ("xmin : " + str(xmin) + " ymin : " + str(ymin) + " xmax : " + str(xmax) + " ymax : " + str(ymax) + " predicted " + str(predicted[0])+  " val : " + str(val) +  " class : " + map_classes_inverse[predicted[0]] + " prob : " + str(prob[0][predicted[0]]) + " count : " + str(c))
               
               if flag_x == True:
                 break
@@ -757,7 +772,7 @@ def theon_sliding_window(model):
     
     f = open('Result/' + image.strip('jpg') + 'txt','w')
     draw = ImageDraw.Draw(img2)
-    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict,0.3)
+    new_boxes = aegon_targaryen_non_maximum_supression(bd_boxes_dict, prob_dict, val_dict, 0.5)
     del bd_boxes_dict
     for new_box in new_boxes:
       x1 = new_box[0]
@@ -775,7 +790,7 @@ def theon_sliding_window(model):
       if predicted[0] != 0:
         category = map_classes_inverse[predicted[0]]
         prob = getProb(output)
-        if prob[0][predicted[0]] > 0.35:
+        if prob[0][predicted[0]] > 0.30:
           f.write(category + "\t")
           f.write(str(x1) + ',' + str(y1) + ',' + str(x2) + ',' + str(y2) + "\n")
           draw.rectangle(((x1, y1), (x2, y2)), outline='green')
@@ -787,10 +802,11 @@ def theon_sliding_window(model):
     
 
 
-def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
+def aegon_targaryen_non_maximum_supression(boxes, prob_dict, val_dict, threshold = 0.3):
   # if there are no boxes, return an empty list
   print ("Non-Maximum Suppression")
   boxes = np.asarray(boxes)
+
   if len(boxes) == 0:
     return []
  
@@ -803,10 +819,17 @@ def aegon_targaryen_non_maximum_supression(boxes,threshold = 0.3):
   x2 = boxes[:,2]
   y2 = boxes[:,3]
  
+  # reqd_y2 = []
+  # for key, value in sorted(val_dict.iteritems(), key=lambda (k,v): (v,k)):
+  #   reqd_y2.append(key)
+
+  # reqd_y2 = np.array(reqd_y2)
   # compute the area of the bounding boxes and sort the bounding
   # boxes by the bottom-right y-coordinate of the bounding box
   area = (x2 - x1 + 1) * (y2 - y1 + 1)
   idxs = np.argsort(y2)
+  # idxs = np.argsort(reqd_y2)
+
   # keep looping while some indexes still remain in the indexes
   # list
   while len(idxs) > 0:
